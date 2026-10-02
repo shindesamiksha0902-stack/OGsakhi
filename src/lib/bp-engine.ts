@@ -109,22 +109,22 @@ export function analyzeBloodPressure(
 } {
   if (!logs || logs.length === 0) {
     return {
-      averageSystolic: 115,
-      averageDiastolic: 75,
-      averagePulse: 72,
+      averageSystolic: 0,
+      averageDiastolic: 0,
+      averagePulse: 0,
       fluctuationCount: 0,
       fluctuationRatePercent: 0,
       symptomFrequency: {},
       prediction: {
         riskLevel: 'optimal',
-        headline: 'Blood Pressure Profile is Balanced',
-        summary: 'Keep logging daily to unlock AI hormonal and fluctuation alerts.',
-        predictedRange: '110-120 / 70-80 mmHg',
-        detectedCorrelation: 'No abnormal fluctuations detected yet.',
-        fluctuationPattern: 'Stable',
+        headline: 'No Blood Pressure Readings Recorded Yet',
+        summary: 'Start logging daily morning or evening readings to build your baseline and activate hormonal fluctuation alerts.',
+        predictedRange: 'Awaiting your first BP log',
+        detectedCorrelation: 'No vitals logged yet.',
+        fluctuationPattern: 'None',
         commonSymptoms: [],
-        recommendations: ['Maintain regular hydration (2L+)', 'Log daily morning readings'],
-        clinicalPrecaution: 'Seek medical advice if BP consistently exceeds 140/90 or falls below 90/60.',
+        recommendations: ['Take a quiet 5-minute seated rest before measuring', 'Log morning and evening readings to establish baseline'],
+        clinicalPrecaution: 'Record at least 3-5 readings to establish your personalized baseline.',
         shouldNotifyDoctor: false,
       },
     };

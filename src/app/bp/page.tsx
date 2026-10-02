@@ -206,11 +206,11 @@ export default function BloodPressurePage() {
             <TrendingDown className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-            {analysis ? `${analysis.averageSystolic}/${analysis.averageDiastolic}` : '115/75'}
+            {analysis && logs.length > 0 ? `${analysis.averageSystolic}/${analysis.averageDiastolic}` : '--/--'}
             <span className="text-xs font-normal text-slate-400 ml-1">mmHg</span>
           </div>
           <div className="text-[11px] font-semibold text-emerald-600">
-            Pulse ~{analysis?.averagePulse || 72} bpm
+            {analysis && logs.length > 0 ? `Pulse ~${analysis.averagePulse} bpm` : 'Pulse -- bpm'}
           </div>
         </div>
 
@@ -236,10 +236,10 @@ export default function BloodPressurePage() {
             <Calendar className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-xl sm:text-2xl font-black text-purple-700 tracking-tight">
-            {cycleStats ? `Day ${cycleStats.currentCycleDay}` : 'Day 18'}
+            {cycleStats && cycleStats.totalCyclesTracked > 0 ? `Day ${cycleStats.currentCycleDay}` : 'Ready'}
           </div>
           <div className="text-[11px] font-semibold text-slate-500">
-            {cycleStats?.currentPhase || 'Luteal'} Phase Tone
+            {cycleStats && cycleStats.totalCyclesTracked > 0 ? `${cycleStats.currentPhase} Phase Tone` : 'Clean Baseline'}
           </div>
         </div>
       </div>
@@ -327,80 +327,90 @@ export default function BloodPressurePage() {
           </div>
         </div>
 
-        <div className="h-64 sm:h-72 w-full pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} tickLine={false} />
-              <YAxis domain={[50, 160]} stroke="#94a3b8" tick={{ fontSize: 11 }} tickLine={false} />
-              {/* Optimal zone shaded band */}
-              <ReferenceArea y1={60} y2={120} fill="#ecfdf5" fillOpacity={0.6} />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    return (
-                      <div className="bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200 shadow-lg text-xs space-y-1.5">
-                        <div className="font-bold text-slate-800 flex items-center justify-between gap-4">
-                          <span>{data.fullDate}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                            {data.category}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-slate-700">
-                          <span className="text-rose-600 font-bold">Sys: {data.systolic}</span>
-                          <span className="text-indigo-600 font-bold">Dia: {data.diastolic}</span>
-                          {data.pulse && <span className="text-emerald-600 font-medium">Pulse: {data.pulse} bpm</span>}
-                        </div>
-                        {data.fluctuation && (
-                          <div className="text-amber-700 text-[10px] font-semibold bg-amber-50 px-2 py-0.5 rounded-md">
-                            ⚠️ Felt sudden fluctuation on this day
-                          </div>
-                        )}
-                        {data.symptoms && data.symptoms.length > 0 && (
-                          <div className="pt-1 border-t border-slate-100">
-                            <span className="text-[10px] font-bold text-slate-400 block mb-1">
-                              Felt Symptoms:
+        {chartData.length === 0 ? (
+          <div className="h-60 flex flex-col items-center justify-center text-center p-6 space-y-2 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+            <Activity className="w-8 h-8 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-600">No vitals readings recorded yet</p>
+            <p className="text-[11px] text-slate-400 max-w-xs">
+              Tap &apos;Record BP Reading&apos; above to record your first measurement. Your daily trend curve and optimal stability zone will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="h-64 sm:h-72 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11 }} tickLine={false} />
+                <YAxis domain={[50, 160]} stroke="#94a3b8" tick={{ fontSize: 11 }} tickLine={false} />
+                {/* Optimal zone shaded band */}
+                <ReferenceArea y1={60} y2={120} fill="#ecfdf5" fillOpacity={0.6} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200 shadow-lg text-xs space-y-1.5">
+                          <div className="font-bold text-slate-800 flex items-center justify-between gap-4">
+                            <span>{data.fullDate}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                              {data.category}
                             </span>
-                            <div className="flex flex-wrap gap-1">
-                              {data.symptoms.map((s: string, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded border border-rose-100"
-                                >
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
                           </div>
-                        )}
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="systolic"
-                stroke="#f43f5e"
-                strokeWidth={3}
-                dot={{ r: 4, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6 }}
-                name="Systolic"
-              />
-              <Line
-                type="monotone"
-                dataKey="diastolic"
-                stroke="#6366f1"
-                strokeWidth={3}
-                dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
-                activeDot={{ r: 6 }}
-                name="Diastolic"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+                          <div className="flex items-center gap-3 text-slate-700">
+                            <span className="text-rose-600 font-bold">Sys: {data.systolic}</span>
+                            <span className="text-indigo-600 font-bold">Dia: {data.diastolic}</span>
+                            {data.pulse && <span className="text-emerald-600 font-medium">Pulse: {data.pulse} bpm</span>}
+                          </div>
+                          {data.fluctuation && (
+                            <div className="text-amber-700 text-[10px] font-semibold bg-amber-50 px-2 py-0.5 rounded-md">
+                              ⚠️ Felt sudden fluctuation on this day
+                            </div>
+                          )}
+                          {data.symptoms && data.symptoms.length > 0 && (
+                            <div className="pt-1 border-t border-slate-100">
+                              <span className="text-[10px] font-bold text-slate-400 block mb-1">
+                                Felt Symptoms:
+                              </span>
+                              <div className="flex flex-wrap gap-1">
+                                {data.symptoms.map((s: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded border border-rose-100"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="systolic"
+                  stroke="#f43f5e"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }}
+                  activeDot={{ r: 6 }}
+                  name="Systolic"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="diastolic"
+                  stroke="#6366f1"
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
+                  activeDot={{ r: 6 }}
+                  name="Diastolic"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* 5. Reported Symptoms Breakdown */}
@@ -442,84 +452,96 @@ export default function BloodPressurePage() {
           <span className="text-xs text-slate-400">{logs.length} readings recorded</span>
         </div>
 
-        <div className="divide-y divide-slate-100">
-          {logs.map((log) => (
-            <div
-              key={log.id}
-              className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-slate-50/60 p-2.5 rounded-2xl transition-all"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-black text-slate-900 tracking-tight">
-                    {log.systolic}/{log.diastolic} mmHg
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      log.category.includes('Low')
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : log.category.includes('High')
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    }`}
-                  >
-                    {log.category}
-                  </span>
-                  {log.feltFluctuations && (
-                    <span className="text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">
-                      Fluctuation Felt
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span>{log.date}</span>
-                  <span>•</span>
-                  <span>{log.time}</span>
-                  {log.pulse && (
-                    <>
-                      <span>•</span>
-                      <span>Pulse: {log.pulse} bpm</span>
-                    </>
-                  )}
-                  {log.cycleDay && (
-                    <>
-                      <span>•</span>
-                      <span className="text-purple-600 font-medium">Cycle Day {log.cycleDay}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Symptoms chips */}
-                {log.symptoms.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {log.symptoms.map((s, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] font-medium bg-rose-50/80 text-rose-700 px-2 py-0.5 rounded-md border border-rose-100"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {log.notes && (
-                  <p className="text-xs text-slate-500 italic pt-0.5">"{log.notes}"</p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                <button
-                  onClick={() => handleDelete(log.id)}
-                  className="p-1.5 rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
-                  title="Delete log"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+        {logs.length === 0 ? (
+          <div className="text-center py-10 px-4 space-y-2 bg-slate-50/40 rounded-2xl border border-dashed border-slate-200">
+            <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-500 mx-auto flex items-center justify-center">
+              <HeartPulse className="w-5 h-5" />
             </div>
-          ))}
-        </div>
+            <p className="text-xs font-semibold text-slate-700">No blood pressure logs yet</p>
+            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+              Start recording your daily systolic and diastolic readings. Your history and physiological rhythms will be tracked right here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group hover:bg-slate-50/60 p-2.5 rounded-2xl transition-all"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-black text-slate-900 tracking-tight">
+                      {log.systolic}/{log.diastolic} mmHg
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        log.category.includes('Low')
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : log.category.includes('High')
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {log.category}
+                    </span>
+                    {log.feltFluctuations && (
+                      <span className="text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">
+                        Fluctuation Felt
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>{log.date}</span>
+                    <span>•</span>
+                    <span>{log.time}</span>
+                    {log.pulse && (
+                      <>
+                        <span>•</span>
+                        <span>Pulse: {log.pulse} bpm</span>
+                      </>
+                    )}
+                    {log.cycleDay && (
+                      <>
+                        <span>•</span>
+                        <span className="text-purple-600 font-medium">Cycle Day {log.cycleDay}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Symptoms chips */}
+                  {log.symptoms.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {log.symptoms.map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[10px] font-medium bg-rose-50/80 text-rose-700 px-2 py-0.5 rounded-md border border-rose-100"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {log.notes && (
+                    <p className="text-xs text-slate-500 italic pt-0.5">&quot;{log.notes}&quot;</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    onClick={() => handleDelete(log.id)}
+                    className="p-1.5 rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
+                    title="Delete log"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 7. Record Blood Pressure Modal Drawer */}

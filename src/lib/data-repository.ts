@@ -34,17 +34,10 @@ const memoryStore = {
 
 function ensureInitialized() {
   if (!memoryStore.initialized) {
-    const demo = generateRealisticDemoData();
-    memoryStore.cycles = demo.cycles;
-    memoryStore.logs = demo.logs;
-    memoryStore.bpLogs = generateInitialBpLogs(18);
-    const analysis = PatternDetector.analyzeUserTelemetry(
-      demo.cycles,
-      demo.logs,
-      memoryStore.baselineCycleLength,
-      memoryStore.baselinePeriodLength
-    );
-    memoryStore.patterns = analysis.patterns;
+    memoryStore.cycles = [];
+    memoryStore.logs = [];
+    memoryStore.bpLogs = [];
+    memoryStore.patterns = [];
     memoryStore.initialized = true;
   }
 }
@@ -158,7 +151,7 @@ export class DataRepository {
     const reminders: PopupReminder[] = [];
 
     // 1. Period approaching reminder
-    if (settings.enablePeriodAlert) {
+    if (settings.enablePeriodAlert && memoryStore.cycles.length > 0) {
       if (
         stats.daysUntilNextPeriod <= settings.periodAlertDaysBefore &&
         stats.daysUntilNextPeriod >= 0
@@ -180,7 +173,7 @@ export class DataRepository {
     }
 
     // 2. Ovulation / Fertile window reminder
-    if (settings.enableOvulationAlert && stats.currentPhase === 'Ovulatory') {
+    if (settings.enableOvulationAlert && memoryStore.cycles.length > 0 && stats.currentPhase === 'Ovulatory') {
       reminders.push({
         id: 'rem-ovulation-window',
         title: 'Ovulation Window Active',
@@ -227,18 +220,20 @@ export class DataRepository {
     }
 
     // 5. Blood Pressure & Circulation Dip Alert
-    const bpAnalysis = this.getBpAnalysis();
-    if (bpAnalysis.prediction.riskLevel === 'moderate_warning' || bpAnalysis.prediction.riskLevel === 'urgent_clinical') {
-      reminders.push({
-        id: 'rem-bp-fluctuation-alert',
-        title: 'BP Dip & Dizziness Alert ⚠️',
-        message: `${bpAnalysis.prediction.headline}: ${bpAnalysis.prediction.predictedRange}. Rise slowly and hydrate with electrolytes.`,
-        type: 'wellness',
-        priority: 'high',
-        timestamp: 'AI Vitals Advisory',
-        actionText: 'Open BP Tracker',
-        actionUrl: '/bp',
-      });
+    if (memoryStore.bpLogs.length > 0) {
+      const bpAnalysis = this.getBpAnalysis();
+      if (bpAnalysis.prediction.riskLevel === 'moderate_warning' || bpAnalysis.prediction.riskLevel === 'urgent_clinical') {
+        reminders.push({
+          id: 'rem-bp-fluctuation-alert',
+          title: 'BP Dip & Dizziness Alert ⚠️',
+          message: `${bpAnalysis.prediction.headline}: ${bpAnalysis.prediction.predictedRange}. Rise slowly and hydrate with electrolytes.`,
+          type: 'wellness',
+          priority: 'high',
+          timestamp: 'AI Vitals Advisory',
+          actionText: 'Open BP Tracker',
+          actionUrl: '/bp',
+        });
+      }
     }
 
     return reminders;
@@ -289,8 +284,18 @@ export class DataRepository {
   }
 
   static resetToDemoData() {
-    memoryStore.initialized = false;
-    ensureInitialized();
+    const demo = generateRealisticDemoData();
+    memoryStore.cycles = demo.cycles;
+    memoryStore.logs = demo.logs;
+    memoryStore.bpLogs = generateInitialBpLogs(18);
+    const analysis = PatternDetector.analyzeUserTelemetry(
+      demo.cycles,
+      demo.logs,
+      memoryStore.baselineCycleLength,
+      memoryStore.baselinePeriodLength
+    );
+    memoryStore.patterns = analysis.patterns;
+    memoryStore.initialized = true;
     return { success: true, cycles: memoryStore.cycles.length, logs: memoryStore.logs.length, bpLogs: memoryStore.bpLogs.length };
   }
 }

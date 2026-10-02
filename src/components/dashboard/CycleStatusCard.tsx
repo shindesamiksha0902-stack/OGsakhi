@@ -12,14 +12,14 @@ interface CycleStatusCardProps {
 }
 
 export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStatusCardProps) {
+  const hasCycles = stats.totalCyclesTracked > 0;
   const phaseMeta = PHASE_INFO[stats.currentPhase] || PHASE_INFO.Menstrual;
   const [userToggledIds, setUserToggledIds] = useState<Record<string, boolean>>({});
 
   // Percentage around average cycle length
-  const progressPercent = Math.min(
-    100,
-    Math.round((stats.currentCycleDay / stats.averageCycleLength) * 100)
-  );
+  const progressPercent = hasCycles
+    ? Math.min(100, Math.round((stats.currentCycleDay / stats.averageCycleLength) * 100))
+    : 0;
 
   const isGoalDone = (goal: DailyRhythmGoal) => {
     if (userToggledIds[goal.id] !== undefined) {
@@ -60,7 +60,7 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
                 className="stroke-sakhi-500 transition-all duration-1000 ease-out"
                 strokeWidth="8"
                 strokeDasharray={301.6}
-                strokeDashoffset={301.6 - (301.6 * progressPercent) / 100}
+                strokeDashoffset={hasCycles ? 301.6 - (301.6 * progressPercent) / 100 : 301.6}
                 strokeLinecap="round"
                 fill="transparent"
               />
@@ -70,10 +70,10 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
                 Cycle
               </span>
               <span className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight my-0.5">
-                Day {stats.currentCycleDay}
+                {hasCycles ? `Day ${stats.currentCycleDay}` : 'Ready'}
               </span>
               <span className="text-[10px] font-semibold text-slate-400">
-                of {stats.averageCycleLength}d
+                {hasCycles ? `of ${stats.averageCycleLength}d` : 'Clean Slate'}
               </span>
             </div>
           </div>
@@ -81,21 +81,29 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
           <div className="space-y-1.5 text-center sm:text-left">
             <div className="flex items-center justify-center sm:justify-start gap-2">
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${phaseMeta.badge}`}
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                  hasCycles ? phaseMeta.badge : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                }`}
               >
-                {phaseMeta.name}
+                {hasCycles ? phaseMeta.name : '🌱 Clean Slate'}
               </span>
             </div>
 
             <h3 className="text-base sm:text-lg font-bold text-slate-800">
-              {stats.daysUntilNextPeriod > 0
-                ? `Period expected in ~${stats.daysUntilNextPeriod} days`
-                : stats.daysUntilNextPeriod === 0
-                ? 'Period expected today'
-                : `Period is ${Math.abs(stats.daysUntilNextPeriod)} days past estimated date`}
+              {hasCycles
+                ? stats.daysUntilNextPeriod > 0
+                  ? `Period expected in ~${stats.daysUntilNextPeriod} days`
+                  : stats.daysUntilNextPeriod === 0
+                  ? 'Period expected today'
+                  : `Period is ${Math.abs(stats.daysUntilNextPeriod)} days past estimated date`
+                : 'No period recorded yet'}
             </h3>
 
-            <p className="text-xs text-slate-500 max-w-sm">{phaseMeta.description}</p>
+            <p className="text-xs text-slate-500 max-w-sm">
+              {hasCycles
+                ? phaseMeta.description
+                : "Log your last period or record today's symptoms to start your personalized predictions and rhythm."}
+            </p>
           </div>
         </div>
 
@@ -105,7 +113,7 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
             onClick={onOpenLog}
             className="w-full sm:w-auto px-5 py-2.5 rounded-2xl bg-gradient-to-r from-sakhi-500 to-sakhi-600 text-white font-semibold text-xs shadow-md hover:shadow-card active:scale-95 transition-all text-center"
           >
-            + Log Today
+            {hasCycles ? '+ Log Today' : '+ Log First Period / Today'}
           </button>
         </div>
       </div>

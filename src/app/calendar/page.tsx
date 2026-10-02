@@ -73,7 +73,7 @@ export default function CalendarPage() {
   };
 
   const isPredictedPeriodDay = (date: Date) => {
-    if (!stats) return false;
+    if (!stats || stats.totalCyclesTracked === 0) return false;
     if (stats.estimatedNextPeriodDate) {
       const estDate = parseISO(stats.estimatedNextPeriodDate);
       const diff = Math.floor(
@@ -92,7 +92,7 @@ export default function CalendarPage() {
   };
 
   const isFertileDay = (date: Date) => {
-    if (!stats) return false;
+    if (!stats || stats.totalCyclesTracked === 0) return false;
     if (stats.fertileWindow) {
       const start = parseISO(stats.fertileWindow.start);
       const end = parseISO(stats.fertileWindow.end);
@@ -109,7 +109,7 @@ export default function CalendarPage() {
   };
 
   const isOvulationDay = (date: Date) => {
-    if (!stats) return false;
+    if (!stats || stats.totalCyclesTracked === 0) return false;
     const iso = toISODate(date);
     if (stats.ovulationDate === iso) return true;
     if (stats.forecasts?.some((f) => f.ovulationDate === iso)) return true;
