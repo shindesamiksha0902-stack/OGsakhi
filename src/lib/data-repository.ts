@@ -214,6 +214,11 @@ export class DataRepository {
    */
   static getActiveReminders(): PopupReminder[] {
     ensureInitialized();
+    // In clean slate (when no cycles have been logged yet), do not show artificial notification alerts
+    if (memoryStore.cycles.length === 0 && !memoryStore.onboardingProfile?.completed) {
+      return [];
+    }
+
     const stats = this.getCycleStats();
     const todayStr = toISODate(new Date());
     const todayLog = this.getLogForDate(todayStr);
