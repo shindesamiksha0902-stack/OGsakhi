@@ -126,7 +126,7 @@ export default function SettingsPage() {
       const logs = await logsRes.json();
 
       const exportObject = {
-        appName: 'Sakhi Wellness',
+        appName: 'OGsakhi Wellness',
         exportDate: new Date().toISOString(),
         cycleHistory: cycles.data?.cycles || [],
         dailyLogs: logs.data || [],
@@ -136,7 +136,7 @@ export default function SettingsPage() {
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportObject, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute('href', dataStr);
-      downloadAnchor.setAttribute('download', `sakhi_wellness_export_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.setAttribute('download', `ogsakhi_wellness_export_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -357,7 +357,7 @@ export default function SettingsPage() {
               Enable Contextual AI Insights
             </span>
             <span className="text-[11px] text-slate-400 block">
-              Allows Sakhi to summarize patterns and correlate phase with energy and symptoms.
+              Allows OGsakhi to summarize patterns and correlate phase with energy and symptoms.
             </span>
           </div>
           <input
@@ -382,7 +382,7 @@ export default function SettingsPage() {
             <span>Strict Health Privacy Policy</span>
           </div>
           <p>
-            Your menstrual and health telemetry is private to you. Sakhi does not sell personal health information, does not show advertisements, and adheres to non-diagnostic safety guidelines.
+            Your menstrual and health telemetry is private to you. OGsakhi does not sell personal health information, does not show advertisements, and adheres to non-diagnostic safety guidelines.
           </p>
         </div>
 

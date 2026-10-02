@@ -32,7 +32,7 @@ export function QuickAskAi() {
           <Sparkles className="w-4 h-4" />
         </div>
         <div>
-          <h3 className="text-sm font-bold text-slate-800">Ask Sakhi AI</h3>
+          <h3 className="text-sm font-bold text-slate-800">Ask OGsakhi AI</h3>
           <p className="text-[11px] text-slate-500">
             Ask about your tracked logs, cycle rhythms, and wellness patterns
           </p>

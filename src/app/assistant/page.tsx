@@ -142,7 +142,7 @@ function AssistantContent() {
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-slate-800">Sakhi Companion</h1>
+            <h1 className="text-sm font-bold text-slate-800">OGsakhi Companion</h1>
             <p className="text-[11px] text-slate-400">
               {stats
                 ? `Connected to Day ${stats.currentCycleDay} (${stats.currentPhase} Phase)`
@@ -261,7 +261,7 @@ function AssistantContent() {
         {loading && (
           <div className="flex items-center gap-2 text-xs text-slate-400 pl-10 animate-pulse">
             <Sparkles className="w-4 h-4 text-sakhi-400 animate-spin" />
-            <span>Sakhi is analyzing your logs and wellness patterns...</span>
+            <span>OGsakhi is analyzing your logs and wellness patterns...</span>
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -314,7 +314,7 @@ export default function AssistantPage() {
       fallback={
         <div className="flex items-center justify-center h-64 text-xs text-slate-400">
           <Sparkles className="w-5 h-5 text-sakhi-500 animate-spin mr-2" />
-          <span>Loading Sakhi Assistant...</span>
+          <span>Loading OGsakhi Assistant...</span>
         </div>
       }
     >
