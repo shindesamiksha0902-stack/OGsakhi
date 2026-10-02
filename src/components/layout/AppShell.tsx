@@ -14,11 +14,13 @@ import {
   Heart,
   Droplet,
   HeartPulse,
+  User,
 } from 'lucide-react';
 import { DailyLogDrawer } from '../logging/DailyLogDrawer';
 import { PopupReminderManager } from '../notifications/PopupReminderManager';
 import { InstallPwaButton } from '../navigation/InstallPwaButton';
 import { MEDICAL_SAFETY_DISCLAIMER } from '@/lib/constants';
+import { useAuth } from '@/context/AuthContext';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -26,6 +28,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [selectedLogDate, setSelectedLogDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -102,6 +105,28 @@ export function AppShell({ children }: AppShellProps) {
               <PlusCircle className="w-4 h-4" />
               <span>Log Today</span>
             </button>
+            {user ? (
+              <Link
+                href="/auth"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-sakhi-700 transition-colors"
+                title={`Signed in as ${user.email}`}
+              >
+                <div className="w-5 h-5 rounded-full bg-sakhi-600 text-white flex items-center justify-center text-[10px] font-bold">
+                  {user.email?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <span className="hidden sm:inline max-w-[85px] truncate">
+                  {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                href="/auth"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-white hover:bg-rose-50 text-slate-700 hover:text-sakhi-700 border border-slate-200 transition-colors shadow-2xs"
+              >
+                <User className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Sign In</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>

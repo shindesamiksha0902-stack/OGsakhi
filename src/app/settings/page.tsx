@@ -16,8 +16,11 @@ import {
   Volume2,
 } from 'lucide-react';
 import { ReminderSettings } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
 
 export default function SettingsPage() {
+  const { user, signOut } = useAuth();
   const [cycleLength, setCycleLength] = useState(29);
   const [periodLength, setPeriodLength] = useState(5);
   const [enableAi, setEnableAi] = useState(true);
@@ -156,6 +159,38 @@ export default function SettingsPage() {
         <p className="text-xs text-slate-500">
           Manage your cycle forecasting baselines, smart pop-up reminders, and privacy
         </p>
+      </div>
+
+      {/* Account & Supabase Cloud Sync */}
+      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-card space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-sakhi-600" />
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Account & Cloud Sync</h2>
+              <p className="text-[11px] text-slate-400">
+                {user
+                  ? `Signed in as ${user.email}`
+                  : 'Sign in to sync your cycles and BP data permanently across all devices'}
+              </p>
+            </div>
+          </div>
+          {user ? (
+            <button
+              onClick={() => signOut()}
+              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold transition-colors"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <Link
+              href="/auth"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sakhi-500 to-sakhi-600 hover:from-sakhi-600 hover:to-sakhi-700 text-white text-xs font-semibold shadow-xs transition-all"
+            >
+              Sign In / Register
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Pop-up Reminders & Alerts Section */}
