@@ -9,11 +9,21 @@ import { QuickAskAi } from '@/components/dashboard/QuickAskAi';
 import { DailyLogDrawer } from '@/components/logging/DailyLogDrawer';
 import { CycleStats, DailyLogData, DetectedPatternItem, DeviationSeverity } from '@/types';
 import { toISODate } from '@/lib/date-utils';
-import { RefreshCw, HeartPulse, ChevronRight, AlertTriangle, Sparkles } from 'lucide-react';
+import { RefreshCw, HeartPulse, ChevronRight, AlertTriangle, Sparkles, Droplet } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
+import { AuthCard } from '@/components/auth/AuthCard';
 
 export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth();
+  const [isGuest, setIsGuest] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('ogsakhi_guest') === 'true') {
+      setIsGuest(true);
+    }
+  }, []);
   const [stats, setStats] = useState<CycleStats | null>(null);
   const [dailyGoals, setDailyGoals] = useState<any[]>([]);
   const [todayLog, setTodayLog] = useState<DailyLogData | null>(null);
@@ -71,6 +81,35 @@ export default function DashboardPage() {
 
   const latestBp = bpData?.logs?.[0];
   const bpPrediction = bpData?.analysis?.prediction;
+
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sakhi-500 to-peach-400 flex items-center justify-center text-white shadow-card animate-pulse">
+          <Droplet className="w-6 h-6 fill-white/80" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+          <Sparkles className="w-4 h-4 text-sakhi-500 animate-spin" />
+          <span>Opening OGsakhi...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 1st page is Auth page for any visitor who hasn't logged in yet
+  if (!user && !isGuest) {
+    return (
+      <AuthCard
+        allowGuestBypass={true}
+        onContinueAsGuest={() => {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('ogsakhi_guest', 'true');
+          }
+          setIsGuest(true);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
