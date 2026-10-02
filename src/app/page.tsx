@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const checkOnboarding = async () => {
     if (typeof window !== 'undefined') {
       const isCompleted = localStorage.getItem('ogsakhi_onboarding_completed') === 'true';
+      const savedProfileRaw = localStorage.getItem('ogsakhi_onboarding_profile');
+
       if (!isCompleted) {
         try {
           const res = await fetch('/api/onboarding');
@@ -50,6 +52,18 @@ export default function DashboardPage() {
         } catch {
           setShowOnboarding(true);
         }
+      } else if (savedProfileRaw) {
+        // Hydrate backend with stored profile if server restarted
+        try {
+          const parsed = JSON.parse(savedProfileRaw);
+          await fetch('/api/onboarding', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(parsed),
+          });
+        } catch {
+          // silent fallback
+        }
       }
     }
   };
@@ -57,8 +71,8 @@ export default function DashboardPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Check onboarding
-      checkOnboarding();
+      // Check and sync onboarding profile before fetching cycle stats
+      await checkOnboarding();
       // Fetch cycle stats
       const cycleRes = await fetch('/api/cycles');
       const cycleJson = await cycleRes.json();

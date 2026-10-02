@@ -4,7 +4,7 @@ import { AiService } from '@/services/ai-service';
 
 export async function POST(req: Request) {
   try {
-    const { question } = await req.json();
+    const { question, profile: incomingProfile } = await req.json();
 
     if (!question || typeof question !== 'string') {
       return NextResponse.json(
@@ -13,10 +13,14 @@ export async function POST(req: Request) {
       );
     }
 
+    if (incomingProfile && !DataRepository.getOnboardingProfile()) {
+      DataRepository.saveOnboardingProfile(incomingProfile);
+    }
+
     const stats = DataRepository.getCycleStats();
     const allLogs = DataRepository.getLogs();
     const analysis = DataRepository.getPatterns();
-    const profile = DataRepository.getOnboardingProfile();
+    const profile = incomingProfile || DataRepository.getOnboardingProfile();
 
     const recentLogs = allLogs.slice(-14);
 

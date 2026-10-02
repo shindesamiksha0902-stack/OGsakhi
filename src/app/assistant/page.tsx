@@ -94,10 +94,23 @@ function AssistantContent() {
     setLoading(true);
 
     try {
+      let cachedProfile = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('ogsakhi_onboarding_profile');
+          if (raw) cachedProfile = JSON.parse(raw);
+        } catch {
+          // ignore parsing error
+        }
+      }
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: textToSend.trim() }),
+        body: JSON.stringify({
+          question: textToSend.trim(),
+          profile: cachedProfile,
+        }),
       });
 
       const json = await res.json();
