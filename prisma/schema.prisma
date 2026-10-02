@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String            @id @default(cuid())
+  email               String            @unique
+  passwordHash        String
+  name                String?
+  ageRange            String?           // e.g. "18-24", "25-34"
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  
+  // Baseline cycle configuration
+  typicalCycleLength  Int               @default(28)
+  typicalPeriodLength Int               @default(5)
+  onboardingCompleted Boolean           @default(false)
+  isDemo              Boolean           @default(false)
+  
+  // Relations
+  cycles              Cycle[]
+  dailyLogs           DailyLog[]
+  patterns            DetectedPattern[]
+  conversations       Conversation[]
+  preferences         UserPreference?
+}
+
+model UserPreference {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminderTime     String?  // e.g. "21:00"
+  enableAiInsights Boolean  @default(true)
+  shareDataForAi   Boolean  @default(true)
+}
+
+model Cycle {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate    DateTime  // First day of period bleeding
+  endDate      DateTime? // Last day of bleeding
+  cycleEndDate DateTime? // Day prior to next cycle start (calculated)
+  lengthDays   Int?      // Total cycle length (e.g. 29)
+  periodDays   Int?      // Total bleeding duration (e.g. 5)
+  isOngoing    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId, startDate])
+}
+
+model DailyLog {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime      // Stored at YYYY-MM-DD 00:00:00 UTC
+  
+  // Period & flow
+  isPeriodDay     Boolean       @default(false)
+  flowIntensity   String?       // "LIGHT", "MEDIUM", "HEAVY", "SPOTTING"
+  crampSeverity   Int?          // 0 to 5
+  
+  // Mood & Energy
+  moodPrimary     String?       // "Happy", "Calm", "Neutral", "Irritated", "Sad", "Anxious", "Stressed", "Low"
+  moodIntensity   Int?          // 1 to 5
+  energyLevel     String?       // "VERY_LOW", "LOW", "NORMAL", "HIGH", "VERY_HIGH"
+  
+  // Sleep
+  sleepHours      Float?        // e.g. 7.5
+  sleepQuality    Int?          // 1 to 5
+  bedTime         String?       // "23:00"
+  wakeTime        String?       // "07:00"
+  
+  // Lifestyle
+  waterIntakeMl   Int?          // e.g. 2000
+  exerciseMinutes Int?          // e.g. 30
+  exerciseType    String?       // "Walking", "Yoga", "Cardio", "Strength"
+  caffeineCups    Int?          // e.g. 1
+  stressLevel     Int?          // 1 to 5
+  
+  // Journal notes
+  notes           String?
+  
+  // Symptoms
+  symptoms        LogSymptom[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model LogSymptom {
+  id          String   @id @default(cuid())
+  dailyLogId  String
+  dailyLog    DailyLog @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
+  symptomName String   // "Cramps", "Headache", "Back pain", "Bloating", "Acne", "Nausea", "Breast tenderness", "Fatigue", "Dizziness", custom
+  severity    Int      @default(1) // 1 to 3: 1 = Mild, 2 = Moderate, 3 = Severe
+
+  @@index([dailyLogId, symptomName])
+}
+
+model DetectedPattern {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    String   // "CYCLE", "MOOD", "ENERGY", "SYMPTOM", "LIFESTYLE"
+  title       String
+  observation String   // Non-diagnostic explanation: "You tend to report headaches 2 days before your period."
+  severity    String   // "NORMAL", "NOTICE", "CONSIDER_CHECKING"
+  detectedAt  DateTime @default(now())
+  isActive    Boolean  @default(true)
+  metadata    String?  // JSON stringified details/stats
+
+  @@index([userId, isActive])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?   @default("Wellness Discussion")
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String       // "user" | "assistant"
+  content        String
+  structuredJson String?      // 4-part JSON response
+  createdAt      DateTime     @default(now())
+}
