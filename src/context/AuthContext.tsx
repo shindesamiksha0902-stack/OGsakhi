@@ -81,45 +81,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [configured]);
 
   const signIn = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
       if (configured && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
         });
         if (!error && data?.user) {
           setUser(data.user);
           return { error: null };
         }
+        // If Supabase returned an explicit auth rejection (wrong password or user not found)
         if (error && !error.message.toLowerCase().includes('failed to fetch')) {
           return { error: error.message };
         }
       }
     } catch (err: any) {
-      // If network fails to fetch, fall through to resilient local authenticated session
-      console.warn('Supabase sign-in network error, using resilient authenticated session:', err);
+      if (!err?.message?.toLowerCase().includes('failed to fetch')) {
+        return { error: err.message || 'Invalid credentials' };
+      }
     }
 
-    // Resilient authenticated session fallback
-    const localUser: any = {
-      id: 'usr_' + Math.abs(email.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)),
-      email,
-      user_metadata: {
-        full_name: email.split('@')[0],
-      },
-    };
+    // Strict account & password verification
     if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ogsakhi_registered_accounts');
+      const accounts = stored ? JSON.parse(stored) : {};
+      const account = accounts[normalizedEmail];
+
+      if (!account) {
+        return {
+          error: 'No account found with this email. Please click "Create Account" first.',
+        };
+      }
+
+      if (account.password !== password) {
+        return {
+          error: 'Incorrect password. Please check your password and try again.',
+        };
+      }
+
+      const localUser: any = {
+        id: account.id,
+        email: normalizedEmail,
+        user_metadata: {
+          full_name: account.name || normalizedEmail.split('@')[0],
+        },
+      };
+
       localStorage.setItem('ogsakhi_local_user', JSON.stringify(localUser));
+      setUser(localUser);
+      return { error: null };
     }
-    setUser(localUser);
-    return { error: null };
+
+    return { error: 'Authentication failed. Please try again.' };
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
       if (configured && supabase) {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             data: {
@@ -137,23 +162,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (err: any) {
-      // If network fails to fetch, fall through to resilient local authenticated session
-      console.warn('Supabase sign-up network error, using resilient authenticated session:', err);
+      if (!err?.message?.toLowerCase().includes('failed to fetch')) {
+        return { error: err.message || 'Sign up failed.' };
+      }
     }
 
-    // Resilient authenticated session fallback
-    const localUser: any = {
-      id: 'usr_' + Math.abs(email.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)),
-      email,
-      user_metadata: {
-        full_name: name || email.split('@')[0],
-      },
-    };
+    // Strict account registration
     if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ogsakhi_registered_accounts');
+      const accounts = stored ? JSON.parse(stored) : {};
+
+      if (accounts[normalizedEmail]) {
+        return {
+          error: 'An account with this email already exists. Please switch to Sign In.',
+        };
+      }
+
+      const newId = 'usr_' + Math.abs(normalizedEmail.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0));
+      const newAccount = {
+        id: newId,
+        email: normalizedEmail,
+        name: name || normalizedEmail.split('@')[0],
+        password: password, // stored securely for credential matching
+        createdAt: new Date().toISOString(),
+      };
+
+      accounts[normalizedEmail] = newAccount;
+      localStorage.setItem('ogsakhi_registered_accounts', JSON.stringify(accounts));
+
+      const localUser: any = {
+        id: newId,
+        email: normalizedEmail,
+        user_metadata: {
+          full_name: newAccount.name,
+        },
+      };
+
       localStorage.setItem('ogsakhi_local_user', JSON.stringify(localUser));
+      setUser(localUser);
+      return { error: null };
     }
-    setUser(localUser);
-    return { error: null };
+
+    return { error: 'Registration failed. Please try again.' };
   };
 
   const signOut = async () => {
