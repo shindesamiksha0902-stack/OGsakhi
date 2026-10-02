@@ -211,6 +211,9 @@ export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawe
       const data = await res.json();
       if (data.success) {
         setSavedSuccess(true);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('sakhi_log_saved', { detail: { log: payload } }));
+        }
         if (onSaved) onSaved();
         setTimeout(() => {
           onClose();

@@ -257,6 +257,11 @@ export function AppShell({ children }: AppShellProps) {
         isOpen={isLogOpen}
         onClose={() => setIsLogOpen(false)}
         date={selectedLogDate}
+        onSaved={() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sakhi_log_saved'));
+          }
+        }}
       />
     </div>
   );

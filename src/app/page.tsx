@@ -115,12 +115,27 @@ export default function DashboardPage() {
       // Fetch today's log
       const logRes = await fetch(`/api/logs?date=${todayStr}${user?.email ? `&email=${encodeURIComponent(user.email)}` : ''}`);
       const logJson = await logRes.json();
-      if (logJson.success) {
+      if (logJson.success && logJson.data) {
         setTodayLog(logJson.data);
+      } else if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('ogsakhi_daily_logs');
+          if (stored) {
+            const allLogs = JSON.parse(stored);
+            if (allLogs[todayStr]) {
+              setTodayLog(allLogs[todayStr]);
+              fetch('/api/logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...allLogs[todayStr], email: user?.email }),
+              }).catch(() => {});
+            }
+          }
+        } catch {}
       }
 
       // Fetch patterns
-      const patRes = await fetch('/api/analytics/patterns');
+      const patRes = await fetch(`/api/analytics/patterns${emailQuery}`);
       const patJson = await patRes.json();
       if (patJson.success) {
         setPatterns(patJson.data.patterns);
@@ -128,10 +143,24 @@ export default function DashboardPage() {
       }
 
       // Fetch BP telemetry
-      const bpRes = await fetch('/api/bp');
+      const bpRes = await fetch(`/api/bp${emailQuery}`);
       const bpJson = await bpRes.json();
-      if (bpJson.success) {
+      if (bpJson.success && bpJson.data?.logs && bpJson.data.logs.length > 0) {
         setBpData(bpJson.data);
+      } else if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('ogsakhi_bp_logs');
+          if (stored) {
+            const localLogs = JSON.parse(stored);
+            if (Array.isArray(localLogs) && localLogs.length > 0) {
+              setBpData({
+                logs: localLogs,
+                analysis: bpJson.data?.analysis || null,
+                cycleStats: bpJson.data?.cycleStats || null,
+              });
+            }
+          }
+        } catch {}
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -142,6 +171,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
+
+    const handleUpdate = () => {
+      fetchData();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sakhi_log_saved', handleUpdate);
+      window.addEventListener('sakhi_bp_saved', handleUpdate);
+      return () => {
+        window.removeEventListener('sakhi_log_saved', handleUpdate);
+        window.removeEventListener('sakhi_bp_saved', handleUpdate);
+      };
+    }
   }, [user]);
 
   const latestBp = bpData?.logs?.[0];

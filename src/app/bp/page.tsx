@@ -113,6 +113,14 @@ export default function BloodPressurePage() {
       });
       const json = await res.json();
       if (json.success) {
+        if (typeof window !== 'undefined') {
+          try {
+            const existing = JSON.parse(localStorage.getItem('ogsakhi_bp_logs') || '[]');
+            existing.unshift(json.data.log);
+            localStorage.setItem('ogsakhi_bp_logs', JSON.stringify(existing));
+            window.dispatchEvent(new CustomEvent('sakhi_bp_saved', { detail: json.data }));
+          } catch {}
+        }
         setIsModalOpen(false);
         // Reset form
         setSelectedSymptoms([]);
