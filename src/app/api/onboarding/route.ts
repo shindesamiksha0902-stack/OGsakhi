@@ -2,8 +2,26 @@ import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 import { UserOnboardingProfile } from '@/types';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user?.onboardingProfile) {
+        DataRepository.loadUserData(user);
+        return NextResponse.json({
+          success: true,
+          data: {
+            completed: Boolean(user.onboardingProfile.completed),
+            profile: user.onboardingProfile,
+          },
+        });
+      }
+    }
+
     const profile = DataRepository.getOnboardingProfile();
     return NextResponse.json({
       success: true,
@@ -44,6 +62,17 @@ export async function POST(req: Request) {
     };
 
     const result = DataRepository.saveOnboardingProfile(profile);
+
+    // Persist to ServerStorage for cross-device synchronization
+    const email = body.email;
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      ServerStorage.syncUserData(email, {
+        onboardingProfile: profile,
+        cycles: DataRepository.getCycles(),
+        logs: DataRepository.getLogs(),
+      });
+    }
 
     return NextResponse.json({
       success: true,

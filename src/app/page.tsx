@@ -39,27 +39,54 @@ export default function DashboardPage() {
 
   const checkOnboarding = async () => {
     if (typeof window !== 'undefined') {
-      const isCompleted = localStorage.getItem('ogsakhi_onboarding_completed') === 'true';
-      const savedProfileRaw = localStorage.getItem('ogsakhi_onboarding_profile');
+      const email = user?.email;
+      let isCompleted = localStorage.getItem('ogsakhi_onboarding_completed') === 'true';
+      let savedProfileRaw = localStorage.getItem('ogsakhi_onboarding_profile');
 
+      // 1. If user is logged in, query server sync to fetch their cloud-backed profile
+      if (email) {
+        try {
+          const syncRes = await fetch(`/api/user/sync?email=${encodeURIComponent(email)}`);
+          if (syncRes.ok) {
+            const syncJson = await syncRes.json();
+            if (syncJson.success && syncJson.data?.user?.onboardingProfile) {
+              const serverProfile = syncJson.data.user.onboardingProfile;
+              localStorage.setItem('ogsakhi_onboarding_completed', 'true');
+              localStorage.setItem('ogsakhi_onboarding_profile', JSON.stringify(serverProfile));
+              isCompleted = true;
+              savedProfileRaw = JSON.stringify(serverProfile);
+              setShowOnboarding(false);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. If client still does not have completed onboarding, query /api/onboarding
       if (!isCompleted) {
         try {
-          const res = await fetch('/api/onboarding');
+          const res = await fetch(`/api/onboarding${email ? `?email=${encodeURIComponent(email)}` : ''}`);
           const json = await res.json();
-          if (!json?.data?.completed) {
+          if (json?.data?.completed && json?.data?.profile) {
+            localStorage.setItem('ogsakhi_onboarding_completed', 'true');
+            localStorage.setItem('ogsakhi_onboarding_profile', JSON.stringify(json.data.profile));
+            setShowOnboarding(false);
+          } else {
             setShowOnboarding(true);
           }
         } catch {
           setShowOnboarding(true);
         }
       } else if (savedProfileRaw) {
-        // Hydrate backend with stored profile if server restarted
+        // Hydrate backend with stored profile
         try {
           const parsed = JSON.parse(savedProfileRaw);
           await fetch('/api/onboarding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(parsed),
+            body: JSON.stringify({
+              ...parsed,
+              email: user?.email,
+            }),
           });
         } catch {
           // silent fallback
@@ -73,8 +100,10 @@ export default function DashboardPage() {
       setLoading(true);
       // Check and sync onboarding profile before fetching cycle stats
       await checkOnboarding();
+      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+
       // Fetch cycle stats
-      const cycleRes = await fetch('/api/cycles');
+      const cycleRes = await fetch(`/api/cycles${emailQuery}`);
       const cycleJson = await cycleRes.json();
       if (cycleJson.success) {
         setStats(cycleJson.data.stats);
@@ -84,7 +113,7 @@ export default function DashboardPage() {
       }
 
       // Fetch today's log
-      const logRes = await fetch(`/api/logs?date=${todayStr}`);
+      const logRes = await fetch(`/api/logs?date=${todayStr}${user?.email ? `&email=${encodeURIComponent(user.email)}` : ''}`);
       const logJson = await logRes.json();
       if (logJson.success) {
         setTodayLog(logJson.data);
@@ -113,7 +142,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user]);
 
   const latestBp = bpData?.logs?.[0];
   const bpPrediction = bpData?.analysis?.prediction;

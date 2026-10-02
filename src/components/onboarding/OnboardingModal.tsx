@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toISODate } from '@/lib/date-utils';
 import { UserOnboardingProfile } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ interface OnboardingModalProps {
 }
 
 export function OnboardingModal({ isOpen, onComplete, userFirstName }: OnboardingModalProps) {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const totalSteps = 5;
 
@@ -74,7 +76,10 @@ export function OnboardingModal({ isOpen, onComplete, userFirstName }: Onboardin
       const res = await fetch('/api/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          email: user?.email,
+        }),
       });
 
       const json = await res.json();
@@ -83,6 +88,21 @@ export function OnboardingModal({ isOpen, onComplete, userFirstName }: Onboardin
           localStorage.setItem('ogsakhi_onboarding_completed', 'true');
           localStorage.setItem('ogsakhi_onboarding_profile', JSON.stringify(payload));
         }
+
+        if (user?.email) {
+          try {
+            await fetch('/api/user/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'sync',
+                email: user.email,
+                onboardingProfile: payload,
+              }),
+            });
+          } catch {}
+        }
+
         onComplete(payload);
       }
     } catch (err) {

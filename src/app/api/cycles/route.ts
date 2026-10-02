@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 import { CycleEngine } from '@/services/cycle-engine';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user);
+      }
+    }
+
     const cycles = DataRepository.getCycles();
     const stats = DataRepository.getCycleStats();
     const logs = DataRepository.getLogs();
@@ -29,7 +40,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { startDate, endDate, isPeriodDay } = body;
+    const { startDate, endDate, isPeriodDay, email } = body;
 
     if (!startDate) {
       return NextResponse.json(
@@ -40,6 +51,13 @@ export async function POST(req: Request) {
 
     DataRepository.updatePeriodRecord(startDate);
     const stats = DataRepository.getCycleStats();
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      ServerStorage.syncUserData(email, {
+        cycles: DataRepository.getCycles(),
+      });
+    }
 
     return NextResponse.json({
       success: true,

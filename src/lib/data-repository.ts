@@ -46,6 +46,49 @@ function ensureInitialized() {
 }
 
 export class DataRepository {
+  static loadUserData(data: {
+    cycles?: CycleRecord[];
+    logs?: DailyLogData[];
+    bpLogs?: BloodPressureLog[];
+    onboardingProfile?: UserOnboardingProfile | null;
+    reminderSettings?: ReminderSettings;
+  }) {
+    ensureInitialized();
+    if (data.cycles) {
+      memoryStore.cycles = [...data.cycles];
+    }
+    if (data.logs) {
+      memoryStore.logs = [...data.logs];
+    }
+    if (data.bpLogs) {
+      memoryStore.bpLogs = [...data.bpLogs];
+    }
+    if (data.onboardingProfile) {
+      memoryStore.onboardingProfile = data.onboardingProfile;
+      if (data.onboardingProfile.typicalCycleLength && data.onboardingProfile.typicalCycleLength >= 20) {
+        memoryStore.baselineCycleLength = data.onboardingProfile.typicalCycleLength;
+      }
+      if (data.onboardingProfile.typicalPeriodLength && data.onboardingProfile.typicalPeriodLength >= 2) {
+        memoryStore.baselinePeriodLength = data.onboardingProfile.typicalPeriodLength;
+      }
+    }
+    if (data.reminderSettings) {
+      memoryStore.reminderSettings = { ...memoryStore.reminderSettings, ...data.reminderSettings };
+    }
+    this.refreshPatterns();
+  }
+
+  static exportCurrentData() {
+    ensureInitialized();
+    return {
+      cycles: [...memoryStore.cycles],
+      logs: [...memoryStore.logs],
+      bpLogs: [...memoryStore.bpLogs],
+      onboardingProfile: memoryStore.onboardingProfile,
+      reminderSettings: { ...memoryStore.reminderSettings },
+    };
+  }
+
   static getCycles(): CycleRecord[] {
     ensureInitialized();
     return [...memoryStore.cycles];

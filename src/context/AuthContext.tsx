@@ -31,58 +31,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const configured = isSupabaseConfigured();
 
   useEffect(() => {
-    if (!configured || !supabase) {
-      setLoading(false);
-      return;
-    }
-
-    // Check active sessions and set the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setSession(session);
-        setUser(session.user);
-        setLoading(false);
-      } else {
-        // Fallback to local user session if present
-        if (typeof window !== 'undefined') {
-          const cached = localStorage.getItem('ogsakhi_local_user');
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              const accounts = JSON.parse(localStorage.getItem('ogsakhi_registered_accounts') || '{}');
-              if (parsed.email && accounts[parsed.email.toLowerCase()]?.name) {
-                parsed.user_metadata = {
-                  ...parsed.user_metadata,
-                  full_name: accounts[parsed.email.toLowerCase()].name,
-                };
-              }
-              setUser(parsed);
-            } catch (e) {}
-          }
-        }
-        setLoading(false);
-      }
-    }).catch(() => {
-      if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem('ogsakhi_local_user');
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
+    // 1. Restore local user immediately
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('ogsakhi_local_user');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.email) {
             const accounts = JSON.parse(localStorage.getItem('ogsakhi_registered_accounts') || '{}');
-            if (parsed.email && accounts[parsed.email.toLowerCase()]?.name) {
+            if (accounts[parsed.email.toLowerCase()]?.name) {
               parsed.user_metadata = {
                 ...parsed.user_metadata,
                 full_name: accounts[parsed.email.toLowerCase()].name,
               };
             }
             setUser(parsed);
-          } catch (e) {}
-        }
+
+            // Two-way server sync
+            fetch(`/api/user/sync?email=${encodeURIComponent(parsed.email)}`)
+              .then((r) => r.json())
+              .then((json) => {
+                if (json.success && json.data?.user?.onboardingProfile) {
+                  localStorage.setItem('ogsakhi_onboarding_completed', 'true');
+                  localStorage.setItem(
+                    'ogsakhi_onboarding_profile',
+                    JSON.stringify(json.data.user.onboardingProfile)
+                  );
+                } else if (localStorage.getItem('ogsakhi_onboarding_profile')) {
+                  // Push local profile to server
+                  const localProfile = JSON.parse(localStorage.getItem('ogsakhi_onboarding_profile') || '{}');
+                  fetch('/api/user/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'sync',
+                      email: parsed.email,
+                      name: parsed.user_metadata?.full_name,
+                      onboardingProfile: localProfile,
+                    }),
+                  }).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }
+        } catch (e) {}
       }
+    }
+
+    if (!configured || !supabase) {
+      setLoading(false);
+      return;
+    }
+
+    // Check active Supabase sessions if configured
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setSession(session);
+        setUser(session.user);
+      }
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
 
-    // Listen for changes on auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setSession(session);
@@ -99,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
 
+    // 1. Try Supabase if configured and reachable
     try {
       if (configured && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -107,20 +119,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (!error && data?.user) {
           setUser(data.user);
+          fetch(`/api/user/sync?email=${encodeURIComponent(normalizedEmail)}`).catch(() => {});
           return { error: null };
         }
-        // If Supabase returned an explicit auth rejection (wrong password or user not found)
-        if (error && !error.message.toLowerCase().includes('failed to fetch')) {
-          return { error: error.message };
-        }
       }
-    } catch (err: any) {
-      if (!err?.message?.toLowerCase().includes('failed to fetch')) {
-        return { error: err.message || 'Invalid credentials' };
-      }
-    }
+    } catch (err: any) {}
 
-    // Strict account & password verification
+    // 2. Query multi-device ServerStorage backend
+    try {
+      const syncRes = await fetch('/api/user/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'login',
+          email: normalizedEmail,
+          password,
+        }),
+      });
+
+      const syncJson = await syncRes.json();
+      if (syncJson.success && syncJson.data?.user) {
+        const serverUser = syncJson.data.user;
+        const localUser: any = {
+          id: serverUser.id,
+          email: serverUser.email,
+          user_metadata: {
+            full_name: serverUser.name || serverUser.email.split('@')[0],
+          },
+        };
+
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('ogsakhi_registered_accounts');
+          const accounts = stored ? JSON.parse(stored) : {};
+          accounts[normalizedEmail] = {
+            id: serverUser.id,
+            email: serverUser.email,
+            name: serverUser.name,
+            password: password,
+            createdAt: serverUser.createdAt,
+          };
+          localStorage.setItem('ogsakhi_registered_accounts', JSON.stringify(accounts));
+          localStorage.setItem('ogsakhi_local_user', JSON.stringify(localUser));
+
+          if (serverUser.onboardingProfile) {
+            localStorage.setItem('ogsakhi_onboarding_completed', 'true');
+            localStorage.setItem('ogsakhi_onboarding_profile', JSON.stringify(serverUser.onboardingProfile));
+          }
+        }
+
+        setUser(localUser);
+        return { error: null };
+      } else if (syncJson.error && syncJson.error === 'Incorrect password') {
+        return { error: 'Incorrect password. Please check your password and try again.' };
+      }
+    } catch (e) {}
+
+    // 3. Fallback to device localStorage
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('ogsakhi_registered_accounts');
       const accounts = stored ? JSON.parse(stored) : {};
@@ -148,6 +202,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       localStorage.setItem('ogsakhi_local_user', JSON.stringify(localUser));
       setUser(localUser);
+
+      // Background push to server
+      const savedProfile = localStorage.getItem('ogsakhi_onboarding_profile');
+      fetch('/api/user/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sync',
+          email: normalizedEmail,
+          password: password,
+          name: account.name,
+          onboardingProfile: savedProfile ? JSON.parse(savedProfile) : undefined,
+        }),
+      }).catch(() => {});
+
       return { error: null };
     }
 
@@ -157,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, name?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
 
+    // 1. Try Supabase if configured
     try {
       if (configured && supabase) {
         const { data, error } = await supabase.auth.signUp({
@@ -171,19 +241,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!error && data?.user) {
           setUser(data.user);
           const needsEmailConfirmation = !data.session;
+          fetch('/api/user/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'register',
+              email: normalizedEmail,
+              password,
+              name: name || normalizedEmail.split('@')[0],
+            }),
+          }).catch(() => {});
           return { error: null, needsEmailConfirmation };
         }
-        if (error && !error.message.toLowerCase().includes('failed to fetch')) {
-          return { error: error.message };
-        }
       }
-    } catch (err: any) {
-      if (!err?.message?.toLowerCase().includes('failed to fetch')) {
-        return { error: err.message || 'Sign up failed.' };
-      }
-    }
+    } catch (err: any) {}
 
-    // Strict account registration
+    // 2. Register with ServerStorage for multi-device sync
+    try {
+      const regRes = await fetch('/api/user/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          email: normalizedEmail,
+          password,
+          name: name || normalizedEmail.split('@')[0],
+        }),
+      });
+
+      const regJson = await regRes.json();
+      if (!regJson.success && regJson.error?.includes('already exists')) {
+        return {
+          error: 'An account with this email already exists. Please switch to Sign In.',
+        };
+      }
+
+      if (regJson.success && regJson.data?.user) {
+        const serverUser = regJson.data.user;
+        const localUser: any = {
+          id: serverUser.id,
+          email: serverUser.email,
+          user_metadata: {
+            full_name: serverUser.name || serverUser.email.split('@')[0],
+          },
+        };
+
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('ogsakhi_registered_accounts');
+          const accounts = stored ? JSON.parse(stored) : {};
+          accounts[normalizedEmail] = {
+            id: serverUser.id,
+            email: serverUser.email,
+            name: serverUser.name,
+            password: password,
+            createdAt: serverUser.createdAt,
+          };
+          localStorage.setItem('ogsakhi_registered_accounts', JSON.stringify(accounts));
+          localStorage.setItem('ogsakhi_local_user', JSON.stringify(localUser));
+        }
+
+        setUser(localUser);
+        return { error: null };
+      }
+    } catch (e) {}
+
+    // 3. Fallback to localStorage registration
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('ogsakhi_registered_accounts');
       const accounts = stored ? JSON.parse(stored) : {};
@@ -199,7 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: newId,
         email: normalizedEmail,
         name: name || normalizedEmail.split('@')[0],
-        password: password, // stored securely for credential matching
+        password: password,
         createdAt: new Date().toISOString(),
       };
 
@@ -230,6 +352,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {}
     if (typeof window !== 'undefined') {
       localStorage.removeItem('ogsakhi_local_user');
+      localStorage.removeItem('ogsakhi_onboarding_completed');
+      localStorage.removeItem('ogsakhi_onboarding_profile');
       sessionStorage.removeItem('ogsakhi_guest');
     }
     setUser(null);

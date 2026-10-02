@@ -4,13 +4,21 @@ import { AiService } from '@/services/ai-service';
 
 export async function POST(req: Request) {
   try {
-    const { question, profile: incomingProfile } = await req.json();
+    const { question, profile: incomingProfile, email } = await req.json();
 
     if (!question || typeof question !== 'string') {
       return NextResponse.json(
         { success: false, error: 'A question is required' },
         { status: 400 }
       );
+    }
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user);
+      }
     }
 
     if (incomingProfile && !DataRepository.getOnboardingProfile()) {
