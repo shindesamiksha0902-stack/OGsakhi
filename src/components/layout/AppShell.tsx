@@ -67,9 +67,6 @@ export function AppShell({ children }: AppShellProps) {
                   सखी
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium -mt-0.5 hidden sm:block">
-                Personal Cycle, BP & Holistic Companion
-              </p>
             </div>
           </Link>
 
