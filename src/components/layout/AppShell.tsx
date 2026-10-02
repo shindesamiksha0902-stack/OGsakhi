@@ -132,9 +132,20 @@ export function AppShell({ children }: AppShellProps) {
           </nav>
 
           {/* Right Action Toolbar */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <InstallPwaButton />
             <PopupReminderManager onOpenLog={() => handleOpenLog()} />
+            <Link
+              href="/settings"
+              className={`w-9 h-9 rounded-2xl border flex items-center justify-center transition-all ${
+                pathname === '/settings'
+                  ? 'bg-rose-50 border-rose-200 text-sakhi-600 shadow-2xs'
+                  : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80 text-slate-600 hover:text-slate-900'
+              }`}
+              title="Settings & Alerts"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
             <button
               onClick={() => handleOpenLog()}
               className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-gradient-to-r from-sakhi-500 to-sakhi-600 text-white shadow-xs hover:shadow-card hover:from-sakhi-600 hover:to-sakhi-700 transition-all duration-200 active:scale-95"
