@@ -71,6 +71,27 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
+  const displayName = (() => {
+    if (!user) return '';
+    if (typeof window !== 'undefined' && user.email) {
+      try {
+        const stored = localStorage.getItem('ogsakhi_registered_accounts');
+        if (stored) {
+          const accounts = JSON.parse(stored);
+          const acc = accounts[user.email.toLowerCase()];
+          if (acc?.name && acc.name.trim()) {
+            return acc.name;
+          }
+        }
+      } catch (e) {}
+    }
+    const metaName = user.user_metadata?.full_name || (user as any)?.name;
+    if (metaName && metaName.trim() && !metaName.includes('@')) {
+      return metaName;
+    }
+    return user.email?.split('@')[0] || 'User';
+  })();
+
   return (
     <div className="min-h-screen flex flex-col bg-[#faf8f5] text-slate-800 antialiased selection:bg-sakhi-100 selection:text-sakhi-700">
       {/* Top Header */}
@@ -125,13 +146,13 @@ export function AppShell({ children }: AppShellProps) {
               <Link
                 href="/auth"
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-sakhi-700 transition-colors"
-                title={`Signed in as ${user.email}`}
+                title={`Signed in as ${displayName} (${user.email})`}
               >
                 <div className="w-5 h-5 rounded-full bg-sakhi-600 text-white flex items-center justify-center text-[10px] font-bold">
-                  {user.email?.charAt(0).toUpperCase() || 'U'}
+                  {displayName.charAt(0).toUpperCase()}
                 </div>
-                <span className="hidden sm:inline max-w-[85px] truncate">
-                  {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                <span className="hidden sm:inline max-w-[120px] truncate">
+                  {displayName}
                 </span>
               </Link>
             ) : (

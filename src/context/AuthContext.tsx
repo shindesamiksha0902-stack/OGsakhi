@@ -48,7 +48,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const cached = localStorage.getItem('ogsakhi_local_user');
           if (cached) {
             try {
-              setUser(JSON.parse(cached));
+              const parsed = JSON.parse(cached);
+              const accounts = JSON.parse(localStorage.getItem('ogsakhi_registered_accounts') || '{}');
+              if (parsed.email && accounts[parsed.email.toLowerCase()]?.name) {
+                parsed.user_metadata = {
+                  ...parsed.user_metadata,
+                  full_name: accounts[parsed.email.toLowerCase()].name,
+                };
+              }
+              setUser(parsed);
             } catch (e) {}
           }
         }
@@ -59,7 +67,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cached = localStorage.getItem('ogsakhi_local_user');
         if (cached) {
           try {
-            setUser(JSON.parse(cached));
+            const parsed = JSON.parse(cached);
+            const accounts = JSON.parse(localStorage.getItem('ogsakhi_registered_accounts') || '{}');
+            if (parsed.email && accounts[parsed.email.toLowerCase()]?.name) {
+              parsed.user_metadata = {
+                ...parsed.user_metadata,
+                full_name: accounts[parsed.email.toLowerCase()].name,
+              };
+            }
+            setUser(parsed);
           } catch (e) {}
         }
       }
