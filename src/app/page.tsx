@@ -157,7 +157,10 @@ export default function DashboardPage() {
             dailyGoals={dailyGoals}
             onOpenLog={() => setIsLogOpen(true)}
           />
-          <ForecastTimeline stats={stats} />
+          <ForecastTimeline
+            stats={stats}
+            onOpenLog={() => setIsLogOpen(true)}
+          />
         </>
       )}
 

@@ -41,6 +41,8 @@ export class AiService {
       cycleDay: stats.currentCycleDay,
       phase: stats.currentPhase,
       daysUntilPeriod: stats.daysUntilNextPeriod,
+      daysUntilNextPeriod: stats.daysUntilNextPeriod,
+      estimatedNextPeriodDate: stats.estimatedNextPeriodDate,
       avgCycleLength: stats.averageCycleLength,
       cycleVariation: stats.cycleVariationDays,
       recentAvgSleep,
@@ -219,8 +221,38 @@ Respond with ONLY the JSON object.`;
       whenToSeekCare =
         'If headaches are unusually severe, sudden, or accompanied by visual disturbances, please consult a healthcare professional.';
     }
+    // Delayed / Late period question
+    else if (
+      qLower.includes('delay') ||
+      qLower.includes('late') ||
+      qLower.includes('missed') ||
+      qLower.includes('overdue')
+    ) {
+      const daysOverdue =
+        context.daysUntilNextPeriod !== undefined && context.daysUntilNextPeriod < 0
+          ? Math.abs(context.daysUntilNextPeriod)
+          : null;
+
+      whatNoticed += daysOverdue
+        ? `Your estimated period date was approximately ${daysOverdue} days ago (${context.estimatedNextPeriodDate || 'recent date'}).`
+        : `Your cycle is extending beyond your typical ${context.avgCycleLength}-day baseline rhythm.`;
+
+      possibleExplanation =
+        'Occasional cycle delays of 2 to 8 days are extremely common and are most often triggered by temporary cortisol spikes (stress), sleep deficits, recent travel, delayed ovulation, or hormonal fluctuations like PCOS.';
+
+      whatYouCanTry = [
+        'Apply a soothing warm heating pad or take a warm bath to relax pelvic muscular tension.',
+        'Enjoy warm herbal teas like ginger, chamomile, or cinnamon to promote restorative circulation.',
+        'Practice 5–10 minutes of slow deep diaphragmatic breathing to help lower sympathetic stress hormones.',
+        'Log today’s symptoms (such as light spotting, subtle cramping, or discharge changes) to help OGsakhi re-calibrate.',
+        'If you are sexually active, an at-home pregnancy test is recommended once your period is 5–7 days late for clear reassurance.',
+      ];
+
+      whenToSeekCare =
+        'If your period is delayed by more than 14–21 days with negative tests, or if you experience sudden severe lower abdominal pain or abnormal fever, please consult your doctor or gynecologist.';
+    }
     // Regularity question
-    else if (qLower.includes('regular') || qLower.includes('late') || qLower.includes('cycle')) {
+    else if (qLower.includes('regular') || qLower.includes('cycle')) {
       whatNoticed += `Your baseline cycle length is ${context.avgCycleLength} days with a variation of ±${context.cycleVariation} days.`;
       if (profile?.cycleRegularity === 'IRREGULAR_PCOS') {
         possibleExplanation +=

@@ -13,6 +13,8 @@ interface CycleStatusCardProps {
 
 export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStatusCardProps) {
   const hasCycles = stats.totalCyclesTracked > 0;
+  const isDelayed = hasCycles && stats.daysUntilNextPeriod < 0;
+  const delayedDays = isDelayed ? Math.abs(stats.daysUntilNextPeriod) : 0;
   const phaseMeta = PHASE_INFO[stats.currentPhase] || PHASE_INFO.Menstrual;
   const [userToggledIds, setUserToggledIds] = useState<Record<string, boolean>>({});
 
@@ -37,7 +39,13 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
   };
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white via-rose-50/30 to-purple-50/40 border border-rose-100/70 p-6 sm:p-7 shadow-card space-y-5">
+    <div
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br border p-6 sm:p-7 shadow-card space-y-5 transition-all ${
+        isDelayed
+          ? 'from-red-50/50 via-rose-50/30 to-white border-red-200'
+          : 'from-white via-rose-50/30 to-purple-50/40 border-rose-100/70'
+      }`}
+    >
       {/* Top Row: Dial + Status + Log Today */}
       <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6">
         {/* Left: Cycle Day Dial / Hero */}
@@ -57,7 +65,9 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
                 cx="60"
                 cy="60"
                 r="48"
-                className="stroke-sakhi-500 transition-all duration-1000 ease-out"
+                className={`transition-all duration-1000 ease-out ${
+                  isDelayed ? 'stroke-red-500' : 'stroke-sakhi-500'
+                }`}
                 strokeWidth="8"
                 strokeDasharray={301.6}
                 strokeDashoffset={hasCycles ? 301.6 - (301.6 * progressPercent) / 100 : 301.6}
@@ -66,8 +76,14 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none">
-              <span className="text-[9px] uppercase font-bold text-sakhi-600 bg-rose-50/90 px-2 py-0.5 rounded-full border border-rose-100 tracking-wider">
-                Cycle
+              <span
+                className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border tracking-wider ${
+                  isDelayed
+                    ? 'text-red-700 bg-red-100 border-red-200'
+                    : 'text-sakhi-600 bg-rose-50/90 border-rose-100'
+                }`}
+              >
+                {isDelayed ? 'Delayed' : 'Cycle'}
               </span>
               <span className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight my-0.5">
                 {hasCycles ? `Day ${stats.currentCycleDay}` : 'Ready'}
@@ -80,28 +96,41 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
 
           <div className="space-y-1.5 text-center sm:text-left">
             <div className="flex items-center justify-center sm:justify-start gap-2">
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                  hasCycles ? phaseMeta.badge : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                }`}
-              >
-                {hasCycles ? phaseMeta.name : '🌱 Clean Slate'}
-              </span>
+              {isDelayed ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-300 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+                  <span>Period Delayed ({delayedDays}d Overdue)</span>
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                    hasCycles ? phaseMeta.badge : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  }`}
+                >
+                  {hasCycles ? phaseMeta.name : '🌱 Clean Slate'}
+                </span>
+              )}
             </div>
 
-            <h3 className="text-base sm:text-lg font-bold text-slate-800">
+            <h3
+              className={`text-base sm:text-lg font-bold ${
+                isDelayed ? 'text-red-950 font-extrabold' : 'text-slate-800'
+              }`}
+            >
               {hasCycles
                 ? stats.daysUntilNextPeriod > 0
                   ? `Period expected in ~${stats.daysUntilNextPeriod} days`
                   : stats.daysUntilNextPeriod === 0
                   ? 'Period expected today'
-                  : `Period is ${Math.abs(stats.daysUntilNextPeriod)} days past estimated date`
+                  : `🚨 Period is ${delayedDays} days past estimated date`
                 : 'No period recorded yet'}
             </h3>
 
             <p className="text-xs text-slate-500 max-w-sm">
               {hasCycles
-                ? phaseMeta.description
+                ? isDelayed
+                  ? 'Your period is later than your historical baseline. Review restorative steps below or chat with AI.'
+                  : phaseMeta.description
                 : "Log your last period or record today's symptoms to start your personalized predictions and rhythm."}
             </p>
           </div>
