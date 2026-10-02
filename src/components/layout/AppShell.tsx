@@ -95,23 +95,22 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-screen flex flex-col bg-[#faf8f5] text-slate-800 antialiased selection:bg-sakhi-100 selection:text-sakhi-700">
       {/* Top Header */}
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-100/80 shadow-xs">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/70 shadow-xs">
+        <div className="max-w-6xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sakhi-500 to-peach-400 flex items-center justify-center text-white shadow-card group-hover:scale-105 transition-transform duration-200">
               <Droplet className="w-5 h-5 fill-white/80" />
             </div>
-            <div>
-              <div className="flex items-center">
-                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-sakhi-700 via-sakhi-600 to-lavender-600 bg-clip-text text-transparent">
-                  OGsakhi
-                </span>
-              </div>
+            <div className="flex items-center">
+              <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-sakhi-700 via-sakhi-600 to-lavender-600 bg-clip-text text-transparent">
+                OGsakhi
+              </span>
             </div>
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 text-xs font-semibold">
+          <nav className="hidden md:flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/70 text-xs font-semibold shadow-2xs">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -132,26 +131,28 @@ export function AppShell({ children }: AppShellProps) {
             })}
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* Right Action Toolbar */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <InstallPwaButton />
             <PopupReminderManager onOpenLog={() => handleOpenLog()} />
             <button
               onClick={() => handleOpenLog()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-gradient-to-r from-sakhi-500 to-sakhi-600 text-white shadow-sm hover:shadow-card hover:from-sakhi-600 hover:to-sakhi-700 transition-all duration-200 active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-gradient-to-r from-sakhi-500 to-sakhi-600 text-white shadow-xs hover:shadow-card hover:from-sakhi-600 hover:to-sakhi-700 transition-all duration-200 active:scale-95"
             >
-              <PlusCircle className="w-4 h-4" />
-              <span>Log Today</span>
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Log Today</span>
+              <span className="sm:hidden">Log</span>
             </button>
             {user ? (
               <Link
                 href="/auth"
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-sakhi-700 transition-colors"
+                className="flex items-center gap-2 p-0.5 sm:px-2 sm:py-1 rounded-full bg-white hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 transition-all shadow-2xs group"
                 title={`Signed in as ${displayName} (${user.email})`}
               >
-                <div className="w-5 h-5 rounded-full bg-sakhi-600 text-white flex items-center justify-center text-[10px] font-bold">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-sakhi-500 to-peach-400 text-white flex items-center justify-center text-xs font-bold shadow-xs">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
-                <span className="hidden sm:inline max-w-[120px] truncate">
+                <span className="hidden xl:inline text-xs font-semibold text-slate-700 max-w-[85px] truncate">
                   {displayName}
                 </span>
               </Link>

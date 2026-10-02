@@ -67,12 +67,11 @@ export function InstallPwaButton() {
     <>
       <button
         onClick={handleInstallClick}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-xs hover:shadow-card hover:opacity-95 active:scale-95 transition-all"
-        title="Install OGsakhi to Home Screen"
+        className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all shadow-2xs"
+        title="Install OGsakhi to Home Screen / Desktop"
+        aria-label="Install App"
       >
-        <Smartphone className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Install App</span>
-        <span className="sm:hidden">Install</span>
+        <Smartphone className="w-4 h-4" />
       </button>
 
       {/* iOS Safari Instruction Modal */}
