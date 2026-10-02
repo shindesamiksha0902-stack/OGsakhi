@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
+
     const reminders = DataRepository.getActiveReminders();
     const settings = DataRepository.getReminderSettings();
     return NextResponse.json({
@@ -23,6 +34,15 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const email = body.email;
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
 
     // If requesting a test trigger
     if (body.action === 'trigger_test') {
@@ -60,7 +80,7 @@ export async function POST(req: Request) {
 
     // Update settings
     if (body.settings) {
-      const updated = DataRepository.updateReminderSettings(body.settings);
+      const updated = DataRepository.updateReminderSettings(body.settings, email);
       return NextResponse.json({
         success: true,
         data: { settings: updated },

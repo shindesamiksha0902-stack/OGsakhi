@@ -25,8 +25,10 @@ import {
 import { DailyLogData, CycleRecord, CycleStats } from '@/types';
 import { toISODate, formatFriendlyDate } from '@/lib/date-utils';
 import { DailyLogDrawer } from '@/components/logging/DailyLogDrawer';
+import { useAuth } from '@/context/AuthContext';
 
 export default function CalendarPage() {
+  const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [logs, setLogs] = useState<DailyLogData[]>([]);
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
@@ -36,9 +38,10 @@ export default function CalendarPage() {
 
   const fetchCalendarData = async () => {
     try {
+      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
       const [logsRes, cyclesRes] = await Promise.all([
-        fetch('/api/logs'),
-        fetch('/api/cycles'),
+        fetch(`/api/logs${emailQuery}`),
+        fetch(`/api/cycles${emailQuery}`),
       ]);
       const logsJson = await logsRes.json();
       const cyclesJson = await cyclesRes.json();
@@ -55,7 +58,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     fetchCalendarData();
-  }, []);
+  }, [user]);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));

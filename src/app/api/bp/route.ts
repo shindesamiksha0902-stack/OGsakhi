@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get('email');
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
+
     const logs = DataRepository.getBpLogs();
     const analysis = DataRepository.getBpAnalysis();
     const cycleStats = DataRepository.getCycleStats();
@@ -26,7 +37,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { systolic, diastolic, pulse, feltFluctuations, fluctuationType, symptoms, posture, notes, time } = body;
+    const { systolic, diastolic, pulse, feltFluctuations, fluctuationType, symptoms, posture, notes, time, email } = body;
 
     if (!systolic || !diastolic) {
       return NextResponse.json(
@@ -35,19 +46,30 @@ export async function POST(req: Request) {
       );
     }
 
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
-    const newLog = DataRepository.addBpLog({
-      date: todayStr,
-      time: time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      systolic: Number(systolic),
-      diastolic: Number(diastolic),
-      pulse: pulse ? Number(pulse) : undefined,
-      feltFluctuations: Boolean(feltFluctuations),
-      fluctuationType: fluctuationType || (feltFluctuations ? 'drop' : 'none'),
-      symptoms: Array.isArray(symptoms) ? symptoms : [],
-      posture: posture || 'Sitting',
-      notes: notes || '',
-    });
+    const newLog = DataRepository.addBpLog(
+      {
+        date: todayStr,
+        time: time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        systolic: Number(systolic),
+        diastolic: Number(diastolic),
+        pulse: pulse ? Number(pulse) : undefined,
+        feltFluctuations: Boolean(feltFluctuations),
+        fluctuationType: fluctuationType || (feltFluctuations ? 'drop' : 'none'),
+        symptoms: Array.isArray(symptoms) ? symptoms : [],
+        posture: posture || 'Sitting',
+        notes: notes || '',
+      },
+      email
+    );
 
     const updatedAnalysis = DataRepository.getBpAnalysis();
 
@@ -70,6 +92,7 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const email = searchParams.get('email');
 
     if (!id) {
       return NextResponse.json(
@@ -78,7 +101,15 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const removed = DataRepository.deleteBpLog(id);
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
+
+    const removed = DataRepository.deleteBpLog(id, email || undefined);
     const updatedAnalysis = DataRepository.getBpAnalysis();
 
     return NextResponse.json({

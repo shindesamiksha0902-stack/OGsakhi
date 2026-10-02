@@ -40,9 +40,12 @@ export default function SettingsPage() {
     dailyCheckinTime: '20:00',
   });
   const [remindersSaved, setRemindersSaved] = useState(false);
+  const [baselineSaved, setBaselineSaved] = useState(false);
+  const [savingBaselines, setSavingBaselines] = useState(false);
 
   useEffect(() => {
-    fetch('/api/reminders')
+    const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+    fetch(`/api/reminders${emailQuery}`)
       .then((res) => res.json())
       .then((json) => {
         if (json.success && json.data.settings) {
@@ -50,7 +53,17 @@ export default function SettingsPage() {
         }
       })
       .catch((err) => console.error(err));
-  }, []);
+
+    fetch(`/api/onboarding${emailQuery}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data?.profile) {
+          if (json.data.profile.typicalCycleLength) setCycleLength(json.data.profile.typicalCycleLength);
+          if (json.data.profile.typicalPeriodLength) setPeriodLength(json.data.profile.typicalPeriodLength);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   const handleUpdateReminder = async (updated: Partial<ReminderSettings>) => {
     const next = { ...reminders, ...updated };
@@ -59,7 +72,7 @@ export default function SettingsPage() {
       await fetch('/api/reminders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: next }),
+        body: JSON.stringify({ settings: next, email: user?.email }),
       });
       setRemindersSaved(true);
       setTimeout(() => setRemindersSaved(false), 1500);
@@ -68,12 +81,44 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveCycleBaselines = async () => {
+    try {
+      setSavingBaselines(true);
+      await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          typicalCycleLength: cycleLength,
+          typicalPeriodLength: periodLength,
+          email: user?.email,
+        }),
+      });
+
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('ogsakhi_onboarding_profile');
+        if (stored) {
+          const profile = JSON.parse(stored);
+          profile.typicalCycleLength = cycleLength;
+          profile.typicalPeriodLength = periodLength;
+          localStorage.setItem('ogsakhi_onboarding_profile', JSON.stringify(profile));
+        }
+      }
+
+      setBaselineSaved(true);
+      setTimeout(() => setBaselineSaved(false), 2000);
+    } catch (err) {
+      console.error('Failed to save cycle baselines:', err);
+    } finally {
+      setSavingBaselines(false);
+    }
+  };
+
   const handleTriggerTestReminder = async (type: 'period' | 'hydration' | 'ovulation' | 'checkin') => {
     try {
       const res = await fetch('/api/reminders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'trigger_test', type }),
+        body: JSON.stringify({ action: 'trigger_test', type, email: user?.email }),
       });
       const json = await res.json();
       if (json.success && json.data.reminder) {
@@ -106,9 +151,19 @@ export default function SettingsPage() {
     if (!confirm('Clear all data to a clean slate (0 data)? You will start tracking fresh from Day 1.')) return;
     try {
       setClearing(true);
-      const res = await fetch('/api/demo/clear', { method: 'POST' });
+      const res = await fetch('/api/demo/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user?.email }),
+      });
       const json = await res.json();
       if (json.success) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('ogsakhi_onboarding_completed');
+          localStorage.removeItem('ogsakhi_onboarding_profile');
+          localStorage.removeItem('ogsakhi_daily_logs');
+          localStorage.removeItem('ogsakhi_bp_logs');
+        }
         setClearSuccess(true);
         setTimeout(() => setClearSuccess(false), 2500);
       }
@@ -375,6 +430,23 @@ export default function SettingsPage() {
               onChange={(e) => setPeriodLength(Number(e.target.value))}
               className="w-full accent-sakhi-500"
             />
+          </div>
+
+          <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+            <div>
+              {baselineSaved && (
+                <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1.5 animate-in fade-in">
+                  <Check className="w-4 h-4" /> Baseline changes saved successfully!
+                </span>
+              )}
+            </div>
+            <button
+              onClick={handleSaveCycleBaselines}
+              disabled={savingBaselines}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-sakhi-500 to-sakhi-600 hover:from-sakhi-600 hover:to-sakhi-700 text-white text-xs font-semibold shadow-xs transition-all disabled:opacity-50"
+            >
+              {savingBaselines ? 'Saving...' : 'Save Baselines'}
+            </button>
           </div>
         </div>
       </div>

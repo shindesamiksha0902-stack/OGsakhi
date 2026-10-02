@@ -32,8 +32,10 @@ import {
   DetectedPatternItem,
   DeviationSeverity,
 } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 export default function InsightsPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
   const [stats, setStats] = useState<CycleStats | null>(null);
@@ -45,9 +47,10 @@ export default function InsightsPage() {
     const loadInsights = async () => {
       try {
         setLoading(true);
+        const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
         const [cyclesRes, patternsRes] = await Promise.all([
-          fetch('/api/cycles'),
-          fetch('/api/analytics/patterns'),
+          fetch(`/api/cycles${emailQuery}`),
+          fetch(`/api/analytics/patterns${emailQuery}`),
         ]);
 
         const cyclesJson = await cyclesRes.json();
@@ -71,7 +74,7 @@ export default function InsightsPage() {
     };
 
     loadInsights();
-  }, []);
+  }, [user]);
 
   // Data for Cycle Length Bar Chart
   const cycleChartData = cycles

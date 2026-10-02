@@ -31,8 +31,10 @@ import {
 } from 'recharts';
 import { BloodPressureLog, BpPredictionWarning, CycleStats } from '@/types';
 import { COMMON_BP_SYMPTOMS } from '@/lib/bp-engine';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BloodPressurePage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<BloodPressureLog[]>([]);
   const [analysis, setAnalysis] = useState<any>(null);
@@ -54,15 +56,26 @@ export default function BloodPressurePage() {
   const fetchBpData = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/bp');
+      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
+      const res = await fetch(`/api/bp${emailQuery}`);
       const json = await res.json();
       if (json.success) {
         setLogs(json.data.logs);
         setAnalysis(json.data.analysis);
         setCycleStats(json.data.cycleStats);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ogsakhi_bp_logs', JSON.stringify(json.data.logs));
+        }
       }
     } catch (err) {
       console.error('Error fetching BP telemetry:', err);
+      // Fallback to local storage if offline
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('ogsakhi_bp_logs');
+          if (stored) setLogs(JSON.parse(stored));
+        } catch {}
+      }
     } finally {
       setLoading(false);
     }
@@ -70,7 +83,7 @@ export default function BloodPressurePage() {
 
   useEffect(() => {
     fetchBpData();
-  }, []);
+  }, [user]);
 
   const handleToggleSymptom = (label: string) => {
     setSelectedSymptoms((prev) =>
@@ -95,6 +108,7 @@ export default function BloodPressurePage() {
           symptoms: selectedSymptoms,
           posture,
           notes,
+          email: user?.email,
         }),
       });
       const json = await res.json();
@@ -116,7 +130,8 @@ export default function BloodPressurePage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this blood pressure log?')) return;
     try {
-      const res = await fetch(`/api/bp?id=${id}`, { method: 'DELETE' });
+      const emailQuery = user?.email ? `&email=${encodeURIComponent(user.email)}` : '';
+      const res = await fetch(`/api/bp?id=${id}${emailQuery}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.success) {
         await fetchBpData();

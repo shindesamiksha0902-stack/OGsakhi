@@ -22,6 +22,7 @@ import {
 } from '@/lib/constants';
 import { DailyLogData, FlowIntensity, EnergyLevel, MoodPrimary } from '@/types';
 import { formatFriendlyDate } from '@/lib/date-utils';
+import { useAuth } from '@/context/AuthContext';
 
 interface DailyLogDrawerProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ interface DailyLogDrawerProps {
 }
 
 export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawerProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -66,7 +68,38 @@ export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawe
     setLoading(true);
     setSavedSuccess(false);
 
-    fetch(`/api/logs?date=${date}`)
+    let localFound = false;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ogsakhi_daily_logs');
+        if (stored) {
+          const allLogs = JSON.parse(stored);
+          const localLog = allLogs[date];
+          if (localLog) {
+            setIsPeriodDay(!!localLog.isPeriodDay);
+            setFlowIntensity(localLog.flowIntensity || null);
+            setCrampSeverity(localLog.crampSeverity || 0);
+            setMoodPrimary(localLog.moodPrimary || null);
+            setMoodIntensity(localLog.moodIntensity || 3);
+            setEnergyLevel(localLog.energyLevel || 'NORMAL');
+            setSleepHours(localLog.sleepHours ?? 7.5);
+            setSleepQuality(localLog.sleepQuality ?? 4);
+            setSelectedSymptoms(localLog.symptoms || []);
+            setWaterIntakeMl(localLog.waterIntakeMl ?? 2000);
+            setExerciseMinutes(localLog.exerciseMinutes ?? 30);
+            setExerciseType(localLog.exerciseType || 'Walking');
+            setCaffeineCups(localLog.caffeineCups ?? 1);
+            setStressLevel(localLog.stressLevel ?? 2);
+            setMealsStatus(localLog.mealsStatus || 'ON_TIME');
+            setNotes(localLog.notes || '');
+            localFound = true;
+          }
+        }
+      } catch {}
+    }
+
+    const emailQuery = user?.email ? `&email=${encodeURIComponent(user.email)}` : '';
+    fetch(`/api/logs?date=${date}${emailQuery}`)
       .then((res) => res.json())
       .then((json) => {
         if (json.success && json.data) {
@@ -87,7 +120,7 @@ export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawe
           setStressLevel(log.stressLevel ?? 2);
           setMealsStatus(log.mealsStatus || 'ON_TIME');
           setNotes(log.notes || '');
-        } else {
+        } else if (!localFound) {
           // Reset default values for fresh day
           setIsPeriodDay(false);
           setFlowIntensity(null);
@@ -109,7 +142,7 @@ export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawe
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [isOpen, date]);
+  }, [isOpen, date, user]);
 
   const handleToggleSymptom = (symptomName: string) => {
     const exists = selectedSymptoms.some(
@@ -156,11 +189,24 @@ export function DailyLogDrawer({ isOpen, onClose, date, onSaved }: DailyLogDrawe
       symptoms: selectedSymptoms,
     };
 
+    // Save to local backup immediately
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ogsakhi_daily_logs');
+        const allLogs = stored ? JSON.parse(stored) : {};
+        allLogs[date] = payload;
+        localStorage.setItem('ogsakhi_daily_logs', JSON.stringify(allLogs));
+      } catch {}
+    }
+
     try {
       const res = await fetch('/api/logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          email: user?.email,
+        }),
       });
       const data = await res.json();
       if (data.success) {

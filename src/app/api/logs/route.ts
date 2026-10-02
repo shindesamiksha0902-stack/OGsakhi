@@ -6,6 +6,15 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get('date');
+    const email = searchParams.get('email');
+
+    if (email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(email);
+      if (user) {
+        DataRepository.loadUserData(user, email);
+      }
+    }
 
     if (date) {
       const log = DataRepository.getLogForDate(date);
@@ -24,7 +33,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const body: DailyLogData = await req.json();
+    const body: DailyLogData & { email?: string } = await req.json();
 
     if (!body.date) {
       return NextResponse.json(
@@ -33,7 +42,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const savedLog = DataRepository.saveLog(body);
+    if (body.email) {
+      const { ServerStorage } = await import('@/lib/server-storage');
+      const user = ServerStorage.getUser(body.email);
+      if (user) {
+        DataRepository.loadUserData(user, body.email);
+      }
+    }
+
+    const savedLog = DataRepository.saveLog(body, body.email);
     const updatedStats = DataRepository.getCycleStats();
 
     return NextResponse.json({

@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const result = DataRepository.clearAllData();
+    let email: string | undefined;
+    try {
+      const body = await req.json();
+      email = body.email;
+    } catch {}
+
+    if (!email) {
+      const { searchParams } = new URL(req.url);
+      email = searchParams.get('email') || undefined;
+    }
+
+    const result = DataRepository.clearAllData(email);
     return NextResponse.json({
       success: true,
       message: 'App cleared to 0 data (fresh state)',

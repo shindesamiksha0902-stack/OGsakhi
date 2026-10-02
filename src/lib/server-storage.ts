@@ -267,16 +267,13 @@ export class ServerStorage {
         };
       }
 
-      // Merge cycles
+      // Merge cycles (keyed by startDate to allow updating length, ongoing status, etc.)
       if (data.cycles && data.cycles.length > 0) {
-        const existingCycleIds = new Set(user.cycles.map((c) => c.startDate));
+        const cycleMap = new Map(user.cycles.map((c) => [c.startDate, c]));
         for (const cycle of data.cycles) {
-          if (!existingCycleIds.has(cycle.startDate)) {
-            user.cycles.push(cycle);
-            existingCycleIds.add(cycle.startDate);
-          }
+          cycleMap.set(cycle.startDate, { ...cycleMap.get(cycle.startDate), ...cycle });
         }
-        user.cycles.sort(
+        user.cycles = Array.from(cycleMap.values()).sort(
           (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
         );
       }
@@ -312,5 +309,21 @@ export class ServerStorage {
 
     persistDb();
     return user;
+  }
+
+  static clearUserData(email: string): UserAccountData | null {
+    const db = loadDb();
+    const key = this.normalizeEmail(email);
+    const user = db[key];
+    if (user) {
+      user.cycles = [];
+      user.logs = [];
+      user.bpLogs = [];
+      user.onboardingProfile = null;
+      user.updatedAt = new Date().toISOString();
+      persistDb();
+      return user;
+    }
+    return null;
   }
 }

@@ -13,6 +13,7 @@ import { CycleEngine } from '@/services/cycle-engine';
 import { PatternDetector } from '@/services/pattern-detector';
 import { toISODate } from './date-utils';
 import { generateInitialBpLogs, analyzeBloodPressure, classifyBloodPressure } from './bp-engine';
+import { ServerStorage } from './server-storage';
 
 // Global memory cache for immediate reactivity and zero-setup resilience
 const memoryStore = {
@@ -46,14 +47,22 @@ function ensureInitialized() {
 }
 
 export class DataRepository {
-  static loadUserData(data: {
-    cycles?: CycleRecord[];
-    logs?: DailyLogData[];
-    bpLogs?: BloodPressureLog[];
-    onboardingProfile?: UserOnboardingProfile | null;
-    reminderSettings?: ReminderSettings;
-  }) {
+  static activeUserEmail: string | null = null;
+
+  static loadUserData(
+    data: {
+      cycles?: CycleRecord[];
+      logs?: DailyLogData[];
+      bpLogs?: BloodPressureLog[];
+      onboardingProfile?: UserOnboardingProfile | null;
+      reminderSettings?: ReminderSettings;
+    },
+    email?: string
+  ) {
     ensureInitialized();
+    if (email) {
+      this.activeUserEmail = email;
+    }
     if (data.cycles) {
       memoryStore.cycles = [...data.cycles];
     }
@@ -108,13 +117,35 @@ export class DataRepository {
     return [...memoryStore.logs];
   }
 
+  static persistActiveUser(
+    data: {
+      cycles?: CycleRecord[];
+      logs?: DailyLogData[];
+      bpLogs?: BloodPressureLog[];
+      onboardingProfile?: UserOnboardingProfile | null;
+      reminderSettings?: ReminderSettings;
+    },
+    overrideEmail?: string
+  ) {
+    const email = overrideEmail || this.activeUserEmail;
+    if (email) {
+      try {
+        ServerStorage.syncUserData(email, data);
+      } catch (err) {
+        console.warn('Failed to persist active user data:', err);
+      }
+    }
+  }
+
   static getLogForDate(dateStr: string): DailyLogData | null {
     ensureInitialized();
     return memoryStore.logs.find((l) => l.date === dateStr) || null;
   }
 
-  static saveLog(logData: DailyLogData): DailyLogData {
+  static saveLog(logData: DailyLogData, email?: string): DailyLogData {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
+
     const existingIndex = memoryStore.logs.findIndex((l) => l.date === logData.date);
     if (existingIndex >= 0) {
       memoryStore.logs[existingIndex] = { ...memoryStore.logs[existingIndex], ...logData };
@@ -123,15 +154,24 @@ export class DataRepository {
     }
 
     if (logData.isPeriodDay) {
-      this.updatePeriodRecord(logData.date);
+      this.updatePeriodRecord(logData.date, email);
     }
 
     this.refreshPatterns();
+    this.persistActiveUser(
+      {
+        logs: memoryStore.logs,
+        cycles: memoryStore.cycles,
+      },
+      email
+    );
     return logData;
   }
 
-  static updatePeriodRecord(dateStr: string) {
+  static updatePeriodRecord(dateStr: string, email?: string) {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
+
     const sorted = [...memoryStore.cycles].sort(
       (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
     );
@@ -145,6 +185,7 @@ export class DataRepository {
         periodDays: memoryStore.baselinePeriodLength || 5,
         isOngoing: true,
       });
+      this.persistActiveUser({ cycles: memoryStore.cycles }, email);
       return;
     }
 
@@ -176,6 +217,8 @@ export class DataRepository {
         (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
     }
+
+    this.persistActiveUser({ cycles: memoryStore.cycles }, email);
   }
 
   static getOnboardingProfile(): UserOnboardingProfile | null {
@@ -183,8 +226,9 @@ export class DataRepository {
     return memoryStore.onboardingProfile;
   }
 
-  static saveOnboardingProfile(profile: UserOnboardingProfile) {
+  static saveOnboardingProfile(profile: UserOnboardingProfile, email?: string) {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
     memoryStore.onboardingProfile = profile;
 
     if (profile.typicalCycleLength && profile.typicalCycleLength >= 20) {
@@ -195,7 +239,7 @@ export class DataRepository {
     }
 
     if (profile.lastPeriodStartDate) {
-      this.updatePeriodRecord(profile.lastPeriodStartDate);
+      this.updatePeriodRecord(profile.lastPeriodStartDate, email);
 
       // Ensure a log exists for that day so it appears on calendar and logs
       const existing = memoryStore.logs.find((l) => l.date === profile.lastPeriodStartDate);
@@ -213,6 +257,15 @@ export class DataRepository {
     }
 
     this.refreshPatterns();
+    this.persistActiveUser(
+      {
+        onboardingProfile: profile,
+        cycles: memoryStore.cycles,
+        logs: memoryStore.logs,
+      },
+      email
+    );
+
     return {
       success: true,
       profile: memoryStore.onboardingProfile,
@@ -246,9 +299,11 @@ export class DataRepository {
     return { ...memoryStore.reminderSettings };
   }
 
-  static updateReminderSettings(settings: Partial<ReminderSettings>): ReminderSettings {
+  static updateReminderSettings(settings: Partial<ReminderSettings>, email?: string): ReminderSettings {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
     memoryStore.reminderSettings = { ...memoryStore.reminderSettings, ...settings };
+    this.persistActiveUser({ reminderSettings: memoryStore.reminderSettings }, email);
     return { ...memoryStore.reminderSettings };
   }
 
@@ -362,8 +417,10 @@ export class DataRepository {
     return [...memoryStore.bpLogs];
   }
 
-  static addBpLog(logInput: Omit<BloodPressureLog, 'id' | 'category'>): BloodPressureLog {
+  static addBpLog(logInput: Omit<BloodPressureLog, 'id' | 'category'>, email?: string): BloodPressureLog {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
+
     const stats = this.getCycleStats();
     const category = classifyBloodPressure(logInput.systolic, logInput.diastolic);
     const newEntry: BloodPressureLog = {
@@ -376,14 +433,21 @@ export class DataRepository {
 
     // Prepend new entry
     memoryStore.bpLogs.unshift(newEntry);
+    this.persistActiveUser({ bpLogs: memoryStore.bpLogs }, email);
     return newEntry;
   }
 
-  static deleteBpLog(id: string): boolean {
+  static deleteBpLog(id: string, email?: string): boolean {
     ensureInitialized();
+    if (email) this.activeUserEmail = email;
+
     const initialLen = memoryStore.bpLogs.length;
     memoryStore.bpLogs = memoryStore.bpLogs.filter((l) => l.id !== id);
-    return memoryStore.bpLogs.length < initialLen;
+    const changed = memoryStore.bpLogs.length < initialLen;
+    if (changed) {
+      this.persistActiveUser({ bpLogs: memoryStore.bpLogs }, email);
+    }
+    return changed;
   }
 
   static getBpAnalysis() {
@@ -392,12 +456,21 @@ export class DataRepository {
     return analyzeBloodPressure(memoryStore.bpLogs, stats.currentCycleDay, stats.currentPhase);
   }
 
-  static clearAllData() {
+  static clearAllData(email?: string) {
+    const targetEmail = email || this.activeUserEmail;
     memoryStore.cycles = [];
     memoryStore.logs = [];
     memoryStore.bpLogs = [];
     memoryStore.patterns = [];
+    memoryStore.onboardingProfile = null;
     memoryStore.initialized = true;
+
+    if (targetEmail) {
+      try {
+        ServerStorage.clearUserData(targetEmail);
+      } catch {}
+    }
+
     return { success: true, cycles: 0, logs: 0, bpLogs: 0 };
   }
 
