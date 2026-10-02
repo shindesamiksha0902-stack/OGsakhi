@@ -90,9 +90,15 @@ export class CycleEngine {
     else if (cycleVariationDays > 5) confidenceScore -= 18;
     confidenceScore = Math.max(40, Math.min(98, confidenceScore));
 
+    // For future forecasts: ensure predictions project forward into future dates
+    let firstForecastDate = estimatedNextPeriodDate;
+    while (daysBetween(todayStr, firstForecastDate) < 0) {
+      firstForecastDate = addDaysToDate(firstForecastDate, avgCycleLength);
+    }
+
     // Forecast next 2 future periods (user requested 2 months instead of 3)
     const forecasts = this.generateForecasts(
-      estimatedNextPeriodDate,
+      firstForecastDate,
       avgCycleLength,
       avgPeriodLength,
       cycleVariationDays,

@@ -6,6 +6,7 @@ import {
   PopupReminder,
   ReminderSettings,
   BloodPressureLog,
+  UserOnboardingProfile,
 } from '@/types';
 import { generateRealisticDemoData } from './mock-data';
 import { CycleEngine } from '@/services/cycle-engine';
@@ -20,6 +21,7 @@ const memoryStore = {
   logs: [] as DailyLogData[],
   bpLogs: [] as BloodPressureLog[],
   patterns: [] as DetectedPatternItem[],
+  onboardingProfile: null as UserOnboardingProfile | null,
   baselineCycleLength: 29,
   baselinePeriodLength: 5,
   reminderSettings: {
@@ -38,6 +40,7 @@ function ensureInitialized() {
     memoryStore.logs = [];
     memoryStore.bpLogs = [];
     memoryStore.patterns = [];
+    memoryStore.onboardingProfile = null;
     memoryStore.initialized = true;
   }
 }
@@ -85,26 +88,93 @@ export class DataRepository {
   }
 
   static updatePeriodRecord(dateStr: string) {
+    ensureInitialized();
     const sorted = [...memoryStore.cycles].sort(
       (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
     );
     const latest = sorted[0];
-    if (latest) {
-      const diff = Math.floor(
-        (new Date(dateStr).getTime() - new Date(latest.startDate).getTime()) / (1000 * 60 * 60 * 24)
+
+    // If no cycle exists yet, create the active cycle from this date!
+    if (!latest) {
+      memoryStore.cycles.unshift({
+        id: `cycle-${Date.now()}`,
+        startDate: dateStr,
+        periodDays: memoryStore.baselinePeriodLength || 5,
+        isOngoing: true,
+      });
+      return;
+    }
+
+    const diff = Math.floor(
+      (new Date(dateStr).getTime() - new Date(latest.startDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diff > 18) {
+      latest.isOngoing = false;
+      latest.cycleEndDate = dateStr;
+      latest.lengthDays = diff;
+      memoryStore.cycles.unshift({
+        id: `cycle-${Date.now()}`,
+        startDate: dateStr,
+        periodDays: memoryStore.baselinePeriodLength || 5,
+        isOngoing: true,
+      });
+    } else if (diff >= 0 && diff <= 10) {
+      latest.periodDays = Math.max(latest.periodDays || 1, diff + 1);
+    } else if (diff < 0) {
+      // Historical cycle recorded in the past
+      memoryStore.cycles.push({
+        id: `cycle-${Date.now()}`,
+        startDate: dateStr,
+        periodDays: memoryStore.baselinePeriodLength || 5,
+        isOngoing: false,
+      });
+      memoryStore.cycles.sort(
+        (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
       );
-      if (diff > 18) {
-        latest.isOngoing = false;
-        latest.cycleEndDate = dateStr;
-        latest.lengthDays = diff;
-        memoryStore.cycles.unshift({
-          id: `cycle-${Date.now()}`,
-          startDate: dateStr,
-          periodDays: 1,
-          isOngoing: true,
+    }
+  }
+
+  static getOnboardingProfile(): UserOnboardingProfile | null {
+    ensureInitialized();
+    return memoryStore.onboardingProfile;
+  }
+
+  static saveOnboardingProfile(profile: UserOnboardingProfile) {
+    ensureInitialized();
+    memoryStore.onboardingProfile = profile;
+
+    if (profile.typicalCycleLength && profile.typicalCycleLength >= 20) {
+      memoryStore.baselineCycleLength = profile.typicalCycleLength;
+    }
+    if (profile.typicalPeriodLength && profile.typicalPeriodLength >= 2) {
+      memoryStore.baselinePeriodLength = profile.typicalPeriodLength;
+    }
+
+    if (profile.lastPeriodStartDate) {
+      this.updatePeriodRecord(profile.lastPeriodStartDate);
+
+      // Ensure a log exists for that day so it appears on calendar and logs
+      const existing = memoryStore.logs.find((l) => l.date === profile.lastPeriodStartDate);
+      if (!existing) {
+        memoryStore.logs.push({
+          id: `log-${Date.now()}`,
+          date: profile.lastPeriodStartDate,
+          isPeriodDay: true,
+          flowIntensity: 'MEDIUM',
+          symptoms: [],
         });
+      } else {
+        existing.isPeriodDay = true;
       }
     }
+
+    this.refreshPatterns();
+    return {
+      success: true,
+      profile: memoryStore.onboardingProfile,
+      stats: this.getCycleStats(),
+    };
   }
 
   static getPatterns() {

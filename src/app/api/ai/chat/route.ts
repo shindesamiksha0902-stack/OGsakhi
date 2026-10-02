@@ -16,6 +16,7 @@ export async function POST(req: Request) {
     const stats = DataRepository.getCycleStats();
     const allLogs = DataRepository.getLogs();
     const analysis = DataRepository.getPatterns();
+    const profile = DataRepository.getOnboardingProfile();
 
     const recentLogs = allLogs.slice(-14);
 
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       recentLogs,
       patterns: analysis.patterns,
       baselines: analysis.baselines,
+      onboardingProfile: profile,
     });
 
     return NextResponse.json({

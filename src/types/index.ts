@@ -177,3 +177,15 @@ export interface BpPredictionWarning {
   shouldNotifyDoctor: boolean;
 }
 
+export interface UserOnboardingProfile {
+  completed: boolean;
+  lastPeriodStartDate: string; // ISO date YYYY-MM-DD
+  typicalCycleLength: number; // e.g. 28, 29
+  typicalPeriodLength: number; // e.g. 5
+  cycleRegularity: 'REGULAR' | 'SOMEWHAT_IRREGULAR' | 'IRREGULAR_PCOS' | 'BIRTH_CONTROL_POSTPARTUM';
+  primaryGoals: string[]; // e.g. ['period_prediction', 'ovulation', 'symptoms', 'bp_dizziness', 'daily_rhythm']
+  dizzinessOrBpHistory: 'OFTEN' | 'OCCASIONALLY' | 'RARELY_NEVER';
+  completedAt?: string;
+}
+
+

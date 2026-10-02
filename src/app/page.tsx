@@ -13,17 +13,20 @@ import { RefreshCw, HeartPulse, ChevronRight, AlertTriangle, Sparkles, Droplet }
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { AuthCard } from '@/components/auth/AuthCard';
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [isGuest, setIsGuest] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && sessionStorage.getItem('ogsakhi_guest') === 'true') {
       setIsGuest(true);
     }
   }, []);
+
   const [stats, setStats] = useState<CycleStats | null>(null);
   const [dailyGoals, setDailyGoals] = useState<any[]>([]);
   const [todayLog, setTodayLog] = useState<DailyLogData | null>(null);
@@ -34,9 +37,28 @@ export default function DashboardPage() {
 
   const todayStr = toISODate(new Date());
 
+  const checkOnboarding = async () => {
+    if (typeof window !== 'undefined') {
+      const isCompleted = localStorage.getItem('ogsakhi_onboarding_completed') === 'true';
+      if (!isCompleted) {
+        try {
+          const res = await fetch('/api/onboarding');
+          const json = await res.json();
+          if (!json?.data?.completed) {
+            setShowOnboarding(true);
+          }
+        } catch {
+          setShowOnboarding(true);
+        }
+      }
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Check onboarding
+      checkOnboarding();
       // Fetch cycle stats
       const cycleRes = await fetch('/api/cycles');
       const cycleJson = await cycleRes.json();
@@ -196,6 +218,21 @@ export default function DashboardPage() {
         onClose={() => setIsLogOpen(false)}
         date={todayStr}
         onSaved={fetchData}
+      />
+
+      {/* 1st time user Onboarding Questionnaire Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        userFirstName={
+          user?.user_metadata?.first_name ||
+          user?.user_metadata?.full_name?.split(' ')[0] ||
+          user?.email?.split('@')[0] ||
+          ''
+        }
+        onComplete={async () => {
+          setShowOnboarding(false);
+          await fetchData();
+        }}
       />
     </div>
   );
