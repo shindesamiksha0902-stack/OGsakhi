@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -28,11 +28,18 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [selectedLogDate, setSelectedLogDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('ogsakhi_guest') === 'true') {
+      setIsGuest(true);
+    }
+  }, []);
 
   const navItems = [
     { label: 'Today', href: '/', icon: Home },
@@ -52,6 +59,18 @@ export function AppShell({ children }: AppShellProps) {
     setIsLogOpen(true);
   };
 
+  const isAuthPage = pathname === '/auth' || pathname === '/login';
+  const isUnauthenticatedHome = pathname === '/' && !user && !isGuest;
+  const hideNavigation = isAuthPage || isUnauthenticatedHome;
+
+  if (hideNavigation) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center bg-[#faf8f5] text-slate-800 antialiased p-4">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#faf8f5] text-slate-800 antialiased selection:bg-sakhi-100 selection:text-sakhi-700">
       {/* Top Header */}
@@ -62,12 +81,9 @@ export function AppShell({ children }: AppShellProps) {
               <Droplet className="w-5 h-5 fill-white/80" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center">
                 <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-sakhi-700 via-sakhi-600 to-lavender-600 bg-clip-text text-transparent">
                   OGsakhi
-                </span>
-                <span className="text-[10px] font-medium text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-full border border-rose-100">
-                  सखी
                 </span>
               </div>
             </div>

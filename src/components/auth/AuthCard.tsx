@@ -160,12 +160,9 @@ export function AuthCard({
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sakhi-500 to-peach-400 flex items-center justify-center text-white mx-auto shadow-card">
           <Droplet className="w-6 h-6 fill-white/80" />
         </div>
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center">
           <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-sakhi-700 via-sakhi-600 to-lavender-600 bg-clip-text text-transparent">
             OGsakhi
-          </span>
-          <span className="text-[11px] font-medium text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
-            सखी
           </span>
         </div>
         <h1 className="text-lg font-bold text-slate-800">

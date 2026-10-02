@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'OGsakhi (सखी) — AI-Powered Period, BP & Wellness Companion',
+  title: 'OGsakhi — AI-Powered Period, BP & Wellness Companion',
   description:
     'A personal wellness companion for cycle tracking, blood pressure logs, daily holistic check-ins, and safety-aware AI insights.',
   manifest: '/manifest.json',
