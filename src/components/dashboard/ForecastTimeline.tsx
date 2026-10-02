@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { CycleStats, FuturePeriodPrediction } from '@/types';
-import { formatShortDate } from '@/lib/date-utils';
+import { formatShortDate, daysBetween, toISODate } from '@/lib/date-utils';
 import {
   Calendar,
   Sparkles,
@@ -256,62 +256,88 @@ export function ForecastTimeline({ stats, onOpenLog }: ForecastTimelineProps) {
         </div>
       )}
 
-      {/* 2 Upcoming Predicted Cycles Timeline */}
+      {/* Upcoming Predicted Cycles Timeline */}
       <div className="pt-2 space-y-2">
         <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-          Next 2 Cycles Outlook
+          Upcoming Cycles Outlook
         </span>
 
         {!hasCycles ? (
           <div className="p-6 rounded-2xl bg-slate-50/70 border border-dashed border-slate-200 text-center space-y-1.5">
             <p className="text-xs font-semibold text-slate-600">No upcoming cycle forecasts yet</p>
             <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-              Your future 2-month period and fertile window forecast will automatically generate as soon as you record your first period.
+              Your future period and fertile window forecasts will automatically generate as soon as you record your first period.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {forecasts.slice(0, 2).map((f, idx) => (
-              <div
-                key={f.cycleNumber}
-                className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100 hover:border-rose-200 hover:bg-white transition-all space-y-2.5 shadow-2xs"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">
-                    {idx === 0 ? 'Next Cycle' : 'Following Cycle (+2)'}
-                  </span>
-                  <span className="text-[10px] font-semibold text-sakhi-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
-                    {f.confidence}% conf.
-                  </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {forecasts.slice(0, 3).map((f, idx) => {
+              const todayStr = toISODate(new Date());
+              const isPastDue = daysBetween(todayStr, f.startDate) < 0;
+              const delayDays = isPastDue ? Math.abs(daysBetween(todayStr, f.startDate)) : 0;
+
+              return (
+                <div
+                  key={f.cycleNumber}
+                  className={`p-4 rounded-2xl border transition-all space-y-2.5 shadow-2xs ${
+                    isPastDue
+                      ? 'p-4 rounded-2xl bg-red-50/60 border-red-200 hover:border-red-300 hover:bg-red-50/80'
+                      : 'bg-slate-50/70 border-slate-100 hover:border-rose-200 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">
+                      {idx === 0
+                        ? isPastDue
+                          ? 'Next Cycle (Current / Delayed)'
+                          : 'Next Cycle'
+                        : idx === 1
+                        ? 'Following Cycle'
+                        : 'Future Cycle (+2)'}
+                    </span>
+                    {isPastDue ? (
+                      <span className="text-[10px] font-extrabold text-red-700 bg-red-100 px-2 py-0.5 rounded-full border border-red-200 animate-pulse">
+                        {delayDays}d Overdue
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-sakhi-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                        {f.confidence}% conf.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                      <Droplet
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isPastDue ? 'text-red-500 fill-red-100' : 'text-sakhi-500 fill-sakhi-100'
+                        }`}
+                      />
+                      <span className="font-semibold">Period:</span>
+                      <span className={isPastDue ? 'font-bold text-red-900' : ''}>
+                        {formatShortDate(f.startDate)} – {formatShortDate(f.endDate)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>Ovulation:</span>
+                      <span className="font-medium text-slate-800">
+                        {formatShortDate(f.ovulationDate)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 text-[11px]">
+                      <Heart className="w-3 h-3 text-purple-400 shrink-0" />
+                      <span>PMS prep:</span>
+                      <span>
+                        {formatShortDate(f.pmsWindow.start)} – {formatShortDate(f.pmsWindow.end)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-700">
-                    <Droplet className="w-3.5 h-3.5 text-sakhi-500 fill-sakhi-100 shrink-0" />
-                    <span className="font-semibold">Period:</span>
-                    <span>
-                      {formatShortDate(f.startDate)} – {formatShortDate(f.endDate)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Ovulation:</span>
-                    <span className="font-medium text-slate-800">
-                      {formatShortDate(f.ovulationDate)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 text-[11px]">
-                    <Heart className="w-3 h-3 text-purple-400 shrink-0" />
-                    <span>PMS prep:</span>
-                    <span>
-                      {formatShortDate(f.pmsWindow.start)} – {formatShortDate(f.pmsWindow.end)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -90,19 +90,22 @@ export class CycleEngine {
     else if (cycleVariationDays > 5) confidenceScore -= 18;
     confidenceScore = Math.max(40, Math.min(98, confidenceScore));
 
-    // For future forecasts: ensure predictions project forward into future dates
+    // For future forecasts: always start with estimatedNextPeriodDate (the actual next cycle)
+    // Only advance if data is extremely old (> 60 days in past, e.g. multi-month hiatus)
     let firstForecastDate = estimatedNextPeriodDate;
-    while (daysBetween(todayStr, firstForecastDate) < 0) {
-      firstForecastDate = addDaysToDate(firstForecastDate, avgCycleLength);
+    if (daysBetween(todayStr, firstForecastDate) < -60) {
+      while (daysBetween(todayStr, firstForecastDate) < -30) {
+        firstForecastDate = addDaysToDate(firstForecastDate, avgCycleLength);
+      }
     }
 
-    // Forecast next 2 future periods (user requested 2 months instead of 3)
+    // Forecast next 3 cycles so user sees the delayed/pending cycle plus the upcoming 2 future cycles
     const forecasts = this.generateForecasts(
       firstForecastDate,
       avgCycleLength,
       avgPeriodLength,
       cycleVariationDays,
-      2
+      3
     );
 
     return {
