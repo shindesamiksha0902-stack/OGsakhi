@@ -60,16 +60,17 @@ export default function BloodPressurePage() {
       const res = await fetch(`/api/bp${emailQuery}`);
       const json = await res.json();
       if (json.success) {
-        setLogs(json.data.logs);
+        setLogs(json.data.logs ?? []);
         setAnalysis(json.data.analysis);
         setCycleStats(json.data.cycleStats);
-        if (typeof window !== 'undefined') {
+        // Keep localStorage in sync as offline backup
+        if (typeof window !== 'undefined' && json.data.logs?.length > 0) {
           localStorage.setItem('ogsakhi_bp_logs', JSON.stringify(json.data.logs));
         }
       }
     } catch (err) {
-      console.error('Error fetching BP telemetry:', err);
-      // Fallback to local storage if offline
+      console.error('Error fetching BP data:', err);
+      // Offline fallback — show cached data
       if (typeof window !== 'undefined') {
         try {
           const stored = localStorage.getItem('ogsakhi_bp_logs');
@@ -80,6 +81,7 @@ export default function BloodPressurePage() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchBpData();

@@ -117,7 +117,9 @@ export interface ReminderSettings {
   enableHydrationNudge: boolean;
   enableDailyCheckin: boolean;
   dailyCheckinTime: string; // "20:00"
+  enableAi?: boolean; // AI contextual insights toggle
 }
+
 
 export interface DetectedPatternItem {
   id: string;

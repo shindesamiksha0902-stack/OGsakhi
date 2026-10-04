@@ -1,4 +1,4 @@
-import {
+﻿import {
   CycleRecord,
   DailyLogData,
   DetectedPatternItem,
@@ -15,14 +15,30 @@ import { toISODate } from './date-utils';
 import { generateInitialBpLogs, analyzeBloodPressure, classifyBloodPressure } from './bp-engine';
 import { ServerStorage } from './server-storage';
 
-// Global memory cache for immediate reactivity and zero-setup resilience
-const memoryStore = {
+interface MemoryStore {
+  initialized: boolean;
+  cycles: CycleRecord[];
+  logs: DailyLogData[];
+  bpLogs: BloodPressureLog[];
+  patterns: DetectedPatternItem[];
+  onboardingProfile: UserOnboardingProfile | null;
+  baselineCycleLength: number;
+  baselinePeriodLength: number;
+  reminderSettings: ReminderSettings;
+  activeUserEmail: string | null;
+}
+
+declare global {
+  var __ogsakhi_memory_store: MemoryStore | undefined;
+}
+
+const DEFAULT_STORE: MemoryStore = {
   initialized: false,
-  cycles: [] as CycleRecord[],
-  logs: [] as DailyLogData[],
-  bpLogs: [] as BloodPressureLog[],
-  patterns: [] as DetectedPatternItem[],
-  onboardingProfile: null as UserOnboardingProfile | null,
+  cycles: [],
+  logs: [],
+  bpLogs: [],
+  patterns: [],
+  onboardingProfile: null,
   baselineCycleLength: 29,
   baselinePeriodLength: 5,
   reminderSettings: {
@@ -32,8 +48,17 @@ const memoryStore = {
     enableHydrationNudge: true,
     enableDailyCheckin: true,
     dailyCheckinTime: '20:00',
-  } as ReminderSettings,
+    enableAi: true,
+  },
+  activeUserEmail: null,
 };
+
+// Use global to survive Next.js HMR module re-evaluations in dev mode
+if (!global.__ogsakhi_memory_store) {
+  global.__ogsakhi_memory_store = { ...DEFAULT_STORE };
+}
+const memoryStore = global.__ogsakhi_memory_store;
+
 
 function ensureInitialized() {
   if (!memoryStore.initialized) {
@@ -46,8 +71,9 @@ function ensureInitialized() {
   }
 }
 
+
 export class DataRepository {
-  static activeUserEmail: string | null = null;
+  // activeUserEmail is now stored in memoryStore (global) so it survives HMR
 
   static loadUserData(
     data: {
@@ -61,7 +87,7 @@ export class DataRepository {
   ) {
     ensureInitialized();
     if (email) {
-      this.activeUserEmail = email;
+      memoryStore.activeUserEmail = email;
     }
     if (data.cycles) {
       memoryStore.cycles = [...data.cycles];
@@ -127,7 +153,7 @@ export class DataRepository {
     },
     overrideEmail?: string
   ) {
-    const email = overrideEmail || this.activeUserEmail;
+    const email = overrideEmail || memoryStore.activeUserEmail;
     if (email) {
       try {
         ServerStorage.syncUserData(email, data);
@@ -144,7 +170,7 @@ export class DataRepository {
 
   static saveLog(logData: DailyLogData, email?: string): DailyLogData {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
 
     const existingIndex = memoryStore.logs.findIndex((l) => l.date === logData.date);
     if (existingIndex >= 0) {
@@ -170,7 +196,7 @@ export class DataRepository {
 
   static updatePeriodRecord(dateStr: string, email?: string) {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
 
     const sorted = [...memoryStore.cycles].sort(
       (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
@@ -228,7 +254,7 @@ export class DataRepository {
 
   static saveOnboardingProfile(profile: UserOnboardingProfile, email?: string) {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
     memoryStore.onboardingProfile = profile;
 
     if (profile.typicalCycleLength && profile.typicalCycleLength >= 20) {
@@ -301,7 +327,7 @@ export class DataRepository {
 
   static updateReminderSettings(settings: Partial<ReminderSettings>, email?: string): ReminderSettings {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
     memoryStore.reminderSettings = { ...memoryStore.reminderSettings, ...settings };
     this.persistActiveUser({ reminderSettings: memoryStore.reminderSettings }, email);
     return { ...memoryStore.reminderSettings };
@@ -366,7 +392,7 @@ export class DataRepository {
       if (water < 1500) {
         reminders.push({
           id: 'rem-hydration-boost',
-          title: 'Hydration Check-in 💧',
+          title: 'Hydration Check-in ðŸ’§',
           message: `You have logged ${water} ml of water so far today. Drinking a glass of water now supports your energy and reduces headache risk.`,
           type: 'hydration',
           priority: 'medium',
@@ -398,7 +424,7 @@ export class DataRepository {
       if (bpAnalysis.prediction.riskLevel === 'moderate_warning' || bpAnalysis.prediction.riskLevel === 'urgent_clinical') {
         reminders.push({
           id: 'rem-bp-fluctuation-alert',
-          title: 'BP Dip & Dizziness Alert ⚠️',
+          title: 'BP Dip & Dizziness Alert âš ï¸',
           message: `${bpAnalysis.prediction.headline}: ${bpAnalysis.prediction.predictedRange}. Rise slowly and hydrate with electrolytes.`,
           type: 'wellness',
           priority: 'high',
@@ -419,7 +445,7 @@ export class DataRepository {
 
   static addBpLog(logInput: Omit<BloodPressureLog, 'id' | 'category'>, email?: string): BloodPressureLog {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
 
     const stats = this.getCycleStats();
     const category = classifyBloodPressure(logInput.systolic, logInput.diastolic);
@@ -439,7 +465,7 @@ export class DataRepository {
 
   static deleteBpLog(id: string, email?: string): boolean {
     ensureInitialized();
-    if (email) this.activeUserEmail = email;
+    if (email) memoryStore.activeUserEmail = email;
 
     const initialLen = memoryStore.bpLogs.length;
     memoryStore.bpLogs = memoryStore.bpLogs.filter((l) => l.id !== id);
@@ -457,7 +483,7 @@ export class DataRepository {
   }
 
   static clearAllData(email?: string) {
-    const targetEmail = email || this.activeUserEmail;
+    const targetEmail = email || memoryStore.activeUserEmail;
     memoryStore.cycles = [];
     memoryStore.logs = [];
     memoryStore.bpLogs = [];
@@ -490,3 +516,4 @@ export class DataRepository {
     return { success: true, cycles: memoryStore.cycles.length, logs: memoryStore.logs.length, bpLogs: memoryStore.bpLogs.length };
   }
 }
+

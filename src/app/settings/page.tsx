@@ -23,7 +23,6 @@ export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const [cycleLength, setCycleLength] = useState(29);
   const [periodLength, setPeriodLength] = useState(5);
-  const [enableAi, setEnableAi] = useState(true);
   const [resetting, setResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -38,6 +37,7 @@ export default function SettingsPage() {
     enableHydrationNudge: true,
     enableDailyCheckin: true,
     dailyCheckinTime: '20:00',
+    enableAi: true,
   });
   const [remindersSaved, setRemindersSaved] = useState(false);
   const [baselineSaved, setBaselineSaved] = useState(false);
@@ -49,7 +49,7 @@ export default function SettingsPage() {
       .then((res) => res.json())
       .then((json) => {
         if (json.success && json.data.settings) {
-          setReminders(json.data.settings);
+          setReminders((prev) => ({ ...prev, ...json.data.settings }));
         }
       })
       .catch((err) => console.error(err));
@@ -64,6 +64,7 @@ export default function SettingsPage() {
       })
       .catch(() => {});
   }, [user]);
+
 
   const handleUpdateReminder = async (updated: Partial<ReminderSettings>) => {
     const next = { ...reminders, ...updated };
@@ -469,11 +470,12 @@ export default function SettingsPage() {
           </div>
           <input
             type="checkbox"
-            checked={enableAi}
-            onChange={(e) => setEnableAi(e.target.checked)}
+            checked={reminders.enableAi ?? true}
+            onChange={(e) => handleUpdateReminder({ enableAi: e.target.checked })}
             className="w-4 h-4 accent-sakhi-600 rounded"
           />
         </div>
+
       </div>
 
       {/* Privacy & Health Data Ownership */}

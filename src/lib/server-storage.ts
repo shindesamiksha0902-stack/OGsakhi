@@ -27,6 +27,7 @@ declare global {
 }
 
 function getStoragePath(): string {
+  // Primary: project root /data directory
   try {
     const dir = path.join(process.cwd(), 'data');
     if (!fs.existsSync(dir)) {
@@ -34,7 +35,18 @@ function getStoragePath(): string {
     }
     return path.join(dir, 'users-db.json');
   } catch {
-    return path.join('/tmp', 'ogsakhi-users-db.json');
+    // Fallback: hidden folder in project root
+    try {
+      const dir2 = path.join(process.cwd(), '.ogsakhi-data');
+      if (!fs.existsSync(dir2)) {
+        fs.mkdirSync(dir2, { recursive: true });
+      }
+      return path.join(dir2, 'users-db.json');
+    } catch {
+      // Last resort: OS temp
+      const tmpDir = process.env.TEMP || process.env.TMP || '/tmp';
+      return path.join(tmpDir, 'ogsakhi-users-db.json');
+    }
   }
 }
 
@@ -100,64 +112,47 @@ const SEED_USERS: Record<string, UserAccountData> = {
 };
 
 function loadDb(): Record<string, UserAccountData> {
-  if (global.__ogsakhi_user_db) {
-    return global.__ogsakhi_user_db;
+  // Always check disk first if global cache is not populated
+  if (!global.__ogsakhi_user_db) {
+    const filePath = getStoragePath();
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        global.__ogsakhi_user_db = parsed;
+        // Add any seed users that don't already exist in the file
+        let addedSeed = false;
+        for (const [k, v] of Object.entries(SEED_USERS)) {
+          if (!global.__ogsakhi_user_db![k]) {
+            global.__ogsakhi_user_db![k] = v;
+            addedSeed = true;
+          }
+        }
+        if (addedSeed) persistDb();
+        return global.__ogsakhi_user_db!;
+      }
+    } catch (err) {
+      console.warn('[ServerStorage] Could not read DB from disk, using seed defaults:', err);
+    }
+
+    // No file found — initialize with seeds and persist immediately
+    global.__ogsakhi_user_db = { ...SEED_USERS };
+    persistDb();
   }
 
-  const filePath = getStoragePath();
-  try {
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      global.__ogsakhi_user_db = JSON.parse(raw);
-      // Ensure seed users exist if not overridden
-      for (const [k, v] of Object.entries(SEED_USERS)) {
-        if (!global.__ogsakhi_user_db![k]) {
-          global.__ogsakhi_user_db![k] = v;
-        }
-      }
-      return global.__ogsakhi_user_db!;
-    }
-  } catch (err) {
-    console.warn('Could not read user DB from disk, starting memory cache:', err);
-  }
-
-  // Also check /tmp
-  try {
-    const tmpPath = path.join('/tmp', 'ogsakhi-users-db.json');
-    if (fs.existsSync(tmpPath)) {
-      const raw = fs.readFileSync(tmpPath, 'utf-8');
-      global.__ogsakhi_user_db = JSON.parse(raw);
-      for (const [k, v] of Object.entries(SEED_USERS)) {
-        if (!global.__ogsakhi_user_db![k]) {
-          global.__ogsakhi_user_db![k] = v;
-        }
-      }
-      return global.__ogsakhi_user_db!;
-    }
-  } catch {}
-
-  global.__ogsakhi_user_db = { ...SEED_USERS };
-  persistDb();
   return global.__ogsakhi_user_db;
 }
 
 function persistDb() {
-  const db = loadDb();
+  if (!global.__ogsakhi_user_db) return;
+  const filePath = getStoragePath();
   try {
-    const filePath = getStoragePath();
-    fs.writeFileSync(filePath, JSON.stringify(db, null, 2), 'utf-8');
-  } catch {
-    try {
-      fs.writeFileSync(
-        path.join('/tmp', 'ogsakhi-users-db.json'),
-        JSON.stringify(db, null, 2),
-        'utf-8'
-      );
-    } catch (e) {
-      console.warn('Could not persist user DB to disk, cached in memory:', e);
-    }
+    fs.writeFileSync(filePath, JSON.stringify(global.__ogsakhi_user_db, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[ServerStorage] CRITICAL: Could not persist DB to disk. Data only in memory!', filePath, e);
   }
 }
+
 
 export class ServerStorage {
   static normalizeEmail(email: string): string {

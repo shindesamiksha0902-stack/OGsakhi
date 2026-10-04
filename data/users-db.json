@@ -1,0 +1,48 @@
+﻿{
+    "sam@gmail.com":  {
+                          "id":  "usr_sam",
+                          "logs":  [
+
+                                   ],
+                          "name":  "Sam",
+                          "cycles":  [
+                                         {
+                                             "id":  "cyc_anchor_sam2",
+                                             "lengthDays":  30,
+                                             "startDate":  "2026-08-25",
+                                             "endDate":  "2026-08-29",
+                                             "periodDays":  5,
+                                             "isOngoing":  true
+                                         }
+                                     ],
+                          "createdAt":  "2026-08-25T00:00:00.000Z",
+                          "bpLogs":  [
+
+                                     ],
+                          "updatedAt":  "2026-10-04T18:42:08.321Z",
+                          "email":  "sam@gmail.com"
+                      },
+    "shindesamiksha0902@gmail.com":  {
+                                         "id":  "usr_samiksha",
+                                         "logs":  [
+
+                                                  ],
+                                         "name":  "Sam",
+                                         "cycles":  [
+                                                        {
+                                                            "id":  "cyc_anchor_sam",
+                                                            "lengthDays":  30,
+                                                            "startDate":  "2026-08-25",
+                                                            "endDate":  "2026-08-29",
+                                                            "periodDays":  5,
+                                                            "isOngoing":  true
+                                                        }
+                                                    ],
+                                         "createdAt":  "2026-08-25T00:00:00.000Z",
+                                         "bpLogs":  [
+
+                                                    ],
+                                         "updatedAt":  "2026-10-04T18:42:08.321Z",
+                                         "email":  "shindesamiksha0902@gmail.com"
+                                     }
+}
