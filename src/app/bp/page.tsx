@@ -60,17 +60,45 @@ export default function BloodPressurePage() {
       const res = await fetch(`/api/bp${emailQuery}`);
       const json = await res.json();
       if (json.success) {
-        setLogs(json.data.logs ?? []);
-        setAnalysis(json.data.analysis);
-        setCycleStats(json.data.cycleStats);
-        // Keep localStorage in sync as offline backup
-        if (typeof window !== 'undefined' && json.data.logs?.length > 0) {
-          localStorage.setItem('ogsakhi_bp_logs', JSON.stringify(json.data.logs));
+        const serverLogs: BloodPressureLog[] = json.data.logs ?? [];
+
+        if (serverLogs.length > 0) {
+          // Server has data — it's the truth
+          setLogs(serverLogs);
+          setAnalysis(json.data.analysis);
+          setCycleStats(json.data.cycleStats);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('ogsakhi_bp_logs', JSON.stringify(serverLogs));
+          }
+        } else {
+          // Server is empty — show localStorage backup and re-sync to server
+          if (typeof window !== 'undefined') {
+            try {
+              const cached = localStorage.getItem('ogsakhi_bp_logs');
+              const localLogs: BloodPressureLog[] = cached ? JSON.parse(cached) : [];
+              setLogs(localLogs);
+              setAnalysis(json.data.analysis);
+              setCycleStats(json.data.cycleStats);
+
+              // Re-sync local data back to server (only once per session)
+              if (localLogs.length > 0 && !sessionStorage.getItem('bp_synced')) {
+                sessionStorage.setItem('bp_synced', '1');
+                for (const log of localLogs) {
+                  fetch('/api/bp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...log, email: user?.email }),
+                  }).catch(() => {});
+                }
+              }
+            } catch {
+              setLogs([]);
+            }
+          }
         }
       }
     } catch (err) {
       console.error('Error fetching BP data:', err);
-      // Offline fallback — show cached data
       if (typeof window !== 'undefined') {
         try {
           const stored = localStorage.getItem('ogsakhi_bp_logs');

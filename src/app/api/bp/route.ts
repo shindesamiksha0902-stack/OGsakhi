@@ -40,10 +40,14 @@ async function dbSaveBpLogs(email: string, logs: BloodPressureLog[]): Promise<bo
       .eq('email', normalized)
       .maybeSingle();
 
+    // Deduplicate by id before saving (handles re-sync from localStorage)
+    const deduped = Array.from(new Map(logs.map((l) => [l.id, l])).values())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     if (existing?.id) {
       const { error } = await supabase
         .from('User')
-        .update({ bp_data: logs, updatedAt: new Date().toISOString() })
+        .update({ bp_data: deduped, updatedAt: new Date().toISOString() })
         .eq('email', normalized);
       if (error) { console.error('[BP] dbSaveBpLogs update error:', error.message); return false; }
     } else {
@@ -53,7 +57,7 @@ async function dbSaveBpLogs(email: string, logs: BloodPressureLog[]): Promise<bo
           email: normalized,
           passwordHash: 'app-auto',
           name: normalized.split('@')[0],
-          bp_data: logs,
+          bp_data: deduped,
           onboardingCompleted: false,
         });
       if (error) { console.error('[BP] dbSaveBpLogs insert error:', error.message); return false; }
@@ -120,7 +124,7 @@ export async function POST(req: Request) {
     const category  = classifyBloodPressure(Number(systolic), Number(diastolic));
 
     const newLog: BloodPressureLog = {
-      id: `bp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: body.id || `bp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       date: todayStr,
       time: timeValue,
       systolic:        Number(systolic),
