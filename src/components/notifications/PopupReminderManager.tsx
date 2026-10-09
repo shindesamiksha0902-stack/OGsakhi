@@ -44,7 +44,17 @@ export function PopupReminderManager({ onOpenLog }: PopupReminderManagerProps) {
   // Fetch active reminders on mount
   const fetchReminders = async () => {
     try {
-      const res = await fetch('/api/reminders');
+      // Get email from localStorage so the server can load cycle data
+      let emailQuery = '';
+      try {
+        const cached = localStorage.getItem('ogsakhi_local_user');
+        if (cached) {
+          const u = JSON.parse(cached);
+          if (u?.email) emailQuery = `?email=${encodeURIComponent(u.email)}`;
+        }
+      } catch {}
+
+      const res = await fetch(`/api/reminders${emailQuery}`);
       const json = await res.json();
       if (json.success && json.data.reminders) {
         setActiveReminders(json.data.reminders);
@@ -70,6 +80,7 @@ export function PopupReminderManager({ onOpenLog }: PopupReminderManagerProps) {
       console.error('Failed to load reminders:', err);
     }
   };
+
 
   useEffect(() => {
     fetchReminders();

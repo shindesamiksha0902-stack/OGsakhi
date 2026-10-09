@@ -1,132 +1,90 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { classifyBloodPressure, analyzeBloodPressure } from '@/lib/bp-engine';
 import { DataRepository } from '@/lib/data-repository';
-import { ServerStorage } from '@/lib/server-storage';
+import { dbRead, dbWrite, dbMerge, dedupeBpLogs } from '@/lib/supabase-db';
 import { BloodPressureLog } from '@/types';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// ─── Supabase helpers ────────────────────────────────────────────────────────
-
-async function dbGetBpLogs(email: string): Promise<BloodPressureLog[] | null> {
-  try {
-    const { data, error } = await supabase
-      .from('User')
-      .select('bp_data')
-      .eq('email', email.trim().toLowerCase())
-      .maybeSingle();
-    if (error) {
-      if (error.code === '42703') return null; // column doesn't exist yet
-      console.error('[BP] dbGetBpLogs error:', error.message);
-      return null;
-    }
-    return Array.isArray(data?.bp_data) ? (data.bp_data as BloodPressureLog[]) : null;
-  } catch {
-    return null;
+/** Load user's full data from Storage into DataRepository memory */
+async function hydrateUser(email: string) {
+  // Try Supabase Storage first (works on Vercel)
+  const stored = await dbRead(email);
+  if (stored) {
+    DataRepository.loadUserData(
+      {
+        cycles:           stored.cycles   ?? [],
+        logs:             stored.logs     ?? [],
+        bpLogs:           stored.bpLogs   ?? [],
+        reminderSettings: Object.keys(stored.settings ?? {}).length > 0
+          ? (stored.settings as any)
+          : undefined,
+      },
+      email
+    );
+    return stored;
   }
-}
 
-async function dbSaveBpLogs(email: string, logs: BloodPressureLog[]): Promise<boolean> {
+  // Fallback: local ServerStorage (dev only)
   try {
-    const normalized = email.trim().toLowerCase();
-    // Try update first (user exists)
-    const { data: existing } = await supabase
-      .from('User')
-      .select('id')
-      .eq('email', normalized)
-      .maybeSingle();
-
-    // Deduplicate by id before saving (handles re-sync from localStorage)
-    const deduped = Array.from(new Map(logs.map((l) => [l.id, l])).values())
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    if (existing?.id) {
-      const { error } = await supabase
-        .from('User')
-        .update({ bp_data: deduped, updatedAt: new Date().toISOString() })
-        .eq('email', normalized);
-      if (error) { console.error('[BP] dbSaveBpLogs update error:', error.message); return false; }
-    } else {
-      const { error } = await supabase
-        .from('User')
-        .insert({
-          email: normalized,
-          passwordHash: 'app-auto',
-          name: normalized.split('@')[0],
-          bp_data: deduped,
-          onboardingCompleted: false,
-        });
-      if (error) { console.error('[BP] dbSaveBpLogs insert error:', error.message); return false; }
-    }
-    return true;
-  } catch (e) {
-    console.error('[BP] dbSaveBpLogs exception:', e);
-    return false;
-  }
-}
-
-function hydrateMemory(email: string) {
-  try {
+    const { ServerStorage } = await import('@/lib/server-storage');
     const user = ServerStorage.getUser(email);
     if (user) DataRepository.loadUserData(user, email);
   } catch {}
+  return null;
 }
 
-// ─── GET ─────────────────────────────────────────────────────────────────────
+// ─── GET  /api/bp?email=... ───────────────────────────────────────────────────
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const email = searchParams.get('email');
 
     if (email) {
-      hydrateMemory(email);
-
-      const supaLogs = await dbGetBpLogs(email);
-      if (supaLogs !== null) {
-        // Load supabase logs into DataRepository for analysis
-        DataRepository.loadUserData({ bpLogs: supaLogs }, email);
-        const stats    = DataRepository.getCycleStats();
-        const analysis = analyzeBloodPressure(supaLogs, stats.currentCycleDay, stats.currentPhase);
-        return NextResponse.json({ success: true, data: { logs: supaLogs, analysis, cycleStats: stats } });
-      }
-      // Supabase column not yet available — fall through to in-memory
+      const stored = await hydrateUser(email);
+      const logs   = stored?.bpLogs ?? DataRepository.getBpLogs();
+      const stats  = DataRepository.getCycleStats();
+      const analysis = analyzeBloodPressure(logs, stats.currentCycleDay, stats.currentPhase);
+      return NextResponse.json({ success: true, data: { logs, analysis, cycleStats: stats } });
     }
 
-    const logs      = DataRepository.getBpLogs();
-    const analysis  = DataRepository.getBpAnalysis();
-    const cycleStats = DataRepository.getCycleStats();
-    return NextResponse.json({ success: true, data: { logs, analysis, cycleStats } });
+    return NextResponse.json({
+      success: true,
+      data: {
+        logs:      DataRepository.getBpLogs(),
+        analysis:  DataRepository.getBpAnalysis(),
+        cycleStats: DataRepository.getCycleStats(),
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// ─── POST ────────────────────────────────────────────────────────────────────
+// ─── POST  /api/bp ────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { systolic, diastolic, pulse, feltFluctuations, fluctuationType,
-            symptoms, posture, notes, time, email } = body;
+    const {
+      systolic, diastolic, pulse, feltFluctuations, fluctuationType,
+      symptoms, posture, notes, time, email,
+    } = body;
 
     if (!systolic || !diastolic) {
       return NextResponse.json({ success: false, error: 'Systolic and Diastolic required' }, { status: 400 });
     }
 
-    if (email) hydrateMemory(email);
-    const stats = DataRepository.getCycleStats();
+    // Load existing data so analysis has context
+    const stored = email ? await hydrateUser(email) : null;
+    const existingLogs: BloodPressureLog[] = stored?.bpLogs ?? DataRepository.getBpLogs();
 
+    const stats     = DataRepository.getCycleStats();
     const todayStr  = new Date().toISOString().split('T')[0];
     const timeValue = time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const category  = classifyBloodPressure(Number(systolic), Number(diastolic));
 
     const newLog: BloodPressureLog = {
-      id: body.id || `bp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      date: todayStr,
-      time: timeValue,
+      id:              body.id || `bp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      date:            body.date || todayStr,
+      time:            timeValue,
       systolic:        Number(systolic),
       diastolic:       Number(diastolic),
       pulse:           pulse ? Number(pulse) : undefined,
@@ -136,36 +94,26 @@ export async function POST(req: Request) {
       posture:         posture || 'Sitting',
       notes:           notes || '',
       category,
-      cycleDay:  stats.currentCycleDay,
+      cycleDay:   stats.currentCycleDay,
       cyclePhase: stats.currentPhase,
     };
 
-    if (email) {
-      const existing = (await dbGetBpLogs(email)) ?? [];
-      const updated  = [newLog, ...existing];
-      const saved    = await dbSaveBpLogs(email, updated);
+    // Deduplicate: new log + existing (by id)
+    const updatedLogs = dedupeBpLogs([newLog, ...existingLogs]);
 
-      if (saved) {
-        DataRepository.loadUserData({ bpLogs: updated }, email);
-        const analysis = analyzeBloodPressure(updated, stats.currentCycleDay, stats.currentPhase);
-        return NextResponse.json({ success: true, data: { log: newLog, analysis } });
-      }
-      // Supabase failed — still save to in-memory as best-effort
-      console.error('[BP] Supabase save failed, using in-memory fallback');
+    if (email) {
+      await dbMerge(email, { bpLogs: updatedLogs });
     }
 
-    // In-memory fallback (no email or Supabase unavailable)
-    const saved      = DataRepository.addBpLog({ date: todayStr, time: timeValue, systolic: Number(systolic),
-      diastolic: Number(diastolic), pulse: pulse ? Number(pulse) : undefined,
-      feltFluctuations: Boolean(feltFluctuations), fluctuationType: fluctuationType || 'none',
-      symptoms: Array.isArray(symptoms) ? symptoms : [], posture: posture || 'Sitting', notes: notes || '' }, email);
-    return NextResponse.json({ success: true, data: { log: saved, analysis: DataRepository.getBpAnalysis() } });
+    DataRepository.loadUserData({ bpLogs: updatedLogs }, email || undefined);
+    const analysis = analyzeBloodPressure(updatedLogs, stats.currentCycleDay, stats.currentPhase);
+    return NextResponse.json({ success: true, data: { log: newLog, analysis } });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
-// ─── DELETE ──────────────────────────────────────────────────────────────────
+// ─── DELETE  /api/bp?id=...&email=... ────────────────────────────────────────
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -174,18 +122,16 @@ export async function DELETE(req: Request) {
 
     if (!id) return NextResponse.json({ success: false, error: 'ID required' }, { status: 400 });
 
-    if (email) {
-      const existing = (await dbGetBpLogs(email)) ?? [];
-      const updated  = existing.filter((l) => l.id !== id);
-      await dbSaveBpLogs(email, updated);
-      DataRepository.loadUserData({ bpLogs: updated }, email);
-      const stats    = DataRepository.getCycleStats();
-      const analysis = analyzeBloodPressure(updated, stats.currentCycleDay, stats.currentPhase);
-      return NextResponse.json({ success: true, removed: true, data: { analysis } });
-    }
+    const stored = email ? await hydrateUser(email) : null;
+    const existing: BloodPressureLog[] = stored?.bpLogs ?? DataRepository.getBpLogs();
+    const updated = existing.filter((l) => l.id !== id);
 
-    const removed = DataRepository.deleteBpLog(id);
-    return NextResponse.json({ success: true, removed, data: { analysis: DataRepository.getBpAnalysis() } });
+    if (email) await dbMerge(email, { bpLogs: updated });
+
+    DataRepository.loadUserData({ bpLogs: updated }, email || undefined);
+    const stats    = DataRepository.getCycleStats();
+    const analysis = analyzeBloodPressure(updated, stats.currentCycleDay, stats.currentPhase);
+    return NextResponse.json({ success: true, removed: true, data: { analysis } });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
