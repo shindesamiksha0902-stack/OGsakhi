@@ -495,7 +495,7 @@ export class DataRepository {
     return analyzeBloodPressure(memoryStore.bpLogs, stats.currentCycleDay, stats.currentPhase);
   }
 
-  static clearAllData(email?: string) {
+  static async clearAllData(email?: string) {
     const targetEmail = email || memoryStore.activeUserEmail;
     memoryStore.cycles = [];
     memoryStore.logs = [];
@@ -505,9 +505,24 @@ export class DataRepository {
     memoryStore.initialized = true;
 
     if (targetEmail) {
+      // Clear ServerStorage (local dev fallback)
+      try { ServerStorage.clearUserData(targetEmail); } catch {}
+
+      // Clear Supabase Storage — write an empty user object so hydrateUser returns no data
       try {
-        ServerStorage.clearUserData(targetEmail);
-      } catch {}
+        const { dbWrite, DEFAULT_DATA } = await import('@/lib/supabase-db');
+        await dbWrite(targetEmail, {
+          ...DEFAULT_DATA,
+          cycles: [],
+          logs: [],
+          bpLogs: [],
+          onboardingProfile: null,
+          settings: {},
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn('Supabase clear failed:', e);
+      }
     }
 
     return { success: true, cycles: 0, logs: 0, bpLogs: 0 };

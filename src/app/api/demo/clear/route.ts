@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       email = searchParams.get('email') || undefined;
     }
 
-    const result = DataRepository.clearAllData(email);
+    const result = await DataRepository.clearAllData(email);
     return NextResponse.json({
       success: true,
       message: 'App cleared to 0 data (fresh state)',

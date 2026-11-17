@@ -164,6 +164,8 @@ export default function SettingsPage() {
           localStorage.removeItem('ogsakhi_onboarding_profile');
           localStorage.removeItem('ogsakhi_daily_logs');
           localStorage.removeItem('ogsakhi_bp_logs');
+          localStorage.removeItem('ogsakhi_cycles');
+          localStorage.removeItem('ogsakhi_local_user');
         }
         setClearSuccess(true);
         setTimeout(() => setClearSuccess(false), 2500);
