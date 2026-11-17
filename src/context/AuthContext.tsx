@@ -2,11 +2,24 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { User, Session } from '@supabase/supabase-js';
+
+// Minimal local type definitions (avoid importing from @supabase/supabase-js directly
+// to prevent TypeScript bundler/moduleResolution conflicts)
+interface AuthUser {
+  id: string;
+  email?: string;
+  user_metadata?: { full_name?: string; [key: string]: any };
+  [key: string]: any;
+}
+interface AuthSession {
+  user: AuthUser;
+  access_token: string;
+  [key: string]: any;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
   loading: boolean;
   isConfigured: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -25,8 +38,8 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const configured = isSupabaseConfigured();
 
@@ -84,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Check active Supabase sessions if configured
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
       if (session?.user) {
         setSession(session);
         setUser(session.user);
@@ -94,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       if (session?.user) {
         setSession(session);
         setUser(session.user);

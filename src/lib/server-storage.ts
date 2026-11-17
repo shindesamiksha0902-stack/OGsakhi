@@ -50,6 +50,16 @@ function getStoragePath(): string {
   }
 }
 
+// Dynamically compute a recent period date so seed data is always accurate
+function getRecentPeriodDate(): string {
+  const today = new Date();
+  // Find the most recent "cycle day 1" assuming a 30-day cycle, period around 5 days ago
+  const daysAgo = ((today.getDate() - 1) % 30) + 5;
+  const d = new Date(today);
+  d.setDate(d.getDate() - Math.min(daysAgo, 29));
+  return d.toISOString().split('T')[0];
+}
+
 const SEED_USERS: Record<string, UserAccountData> = {
   'shindesamiksha0902@gmail.com': {
     id: 'usr_samiksha',
@@ -57,19 +67,19 @@ const SEED_USERS: Record<string, UserAccountData> = {
     name: 'Sam',
     onboardingProfile: {
       completed: true,
-      lastPeriodStartDate: '2026-08-25',
+      lastPeriodStartDate: getRecentPeriodDate(),
       typicalCycleLength: 30,
       typicalPeriodLength: 5,
       cycleRegularity: 'REGULAR',
       primaryGoals: ['period_prediction', 'symptoms', 'bp_dizziness'],
       dizzinessOrBpHistory: 'OCCASIONALLY',
-      completedAt: '2026-09-20T10:00:00.000Z',
+      completedAt: new Date().toISOString(),
     },
     cycles: [
       {
         id: 'cyc_anchor_sam',
-        startDate: '2026-08-25',
-        endDate: '2026-08-29',
+        startDate: getRecentPeriodDate(),
+        endDate: undefined,
         lengthDays: 30,
         periodDays: 5,
         isOngoing: true,
@@ -77,8 +87,8 @@ const SEED_USERS: Record<string, UserAccountData> = {
     ],
     logs: [],
     bpLogs: [],
-    createdAt: '2026-08-25T00:00:00.000Z',
-    updatedAt: '2026-10-02T00:00:00.000Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
   'sam@gmail.com': {
     id: 'usr_sam',
@@ -86,19 +96,19 @@ const SEED_USERS: Record<string, UserAccountData> = {
     name: 'Sam',
     onboardingProfile: {
       completed: true,
-      lastPeriodStartDate: '2026-08-25',
+      lastPeriodStartDate: getRecentPeriodDate(),
       typicalCycleLength: 30,
       typicalPeriodLength: 5,
       cycleRegularity: 'REGULAR',
       primaryGoals: ['period_prediction', 'symptoms', 'bp_dizziness'],
       dizzinessOrBpHistory: 'OCCASIONALLY',
-      completedAt: '2026-09-20T10:00:00.000Z',
+      completedAt: new Date().toISOString(),
     },
     cycles: [
       {
         id: 'cyc_anchor_sam2',
-        startDate: '2026-08-25',
-        endDate: '2026-08-29',
+        startDate: getRecentPeriodDate(),
+        endDate: undefined,
         lengthDays: 30,
         periodDays: 5,
         isOngoing: true,
@@ -106,8 +116,8 @@ const SEED_USERS: Record<string, UserAccountData> = {
     ],
     logs: [],
     bpLogs: [],
-    createdAt: '2026-08-25T00:00:00.000Z',
-    updatedAt: '2026-10-02T00:00:00.000Z',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
 };
 

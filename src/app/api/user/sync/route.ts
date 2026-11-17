@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ServerStorage } from '@/lib/server-storage';
 import { DataRepository } from '@/lib/data-repository';
+import { dbRead, dbMerge } from '@/lib/supabase-db';
 
 export async function GET(req: Request) {
   try {
@@ -8,45 +9,57 @@ export async function GET(req: Request) {
     const email = searchParams.get('email');
 
     if (!email) {
-      return NextResponse.json(
-        { success: false, error: 'Email parameter required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Email parameter required' }, { status: 400 });
     }
 
+    // Try Supabase Storage first (Vercel-safe)
+    const stored = await dbRead(email);
+    if (stored) {
+      DataRepository.loadUserData(
+        {
+          cycles:           stored.cycles   ?? [],
+          logs:             stored.logs     ?? [],
+          bpLogs:           stored.bpLogs   ?? [],
+          reminderSettings: Object.keys(stored.settings ?? {}).length > 0
+            ? (stored.settings as any)
+            : undefined,
+        },
+        email
+      );
+      const stats = DataRepository.getCycleStats();
+      // Also load from ServerStorage to get onboardingProfile (stored there)
+      const localUser = ServerStorage.getUser(email);
+      return NextResponse.json({
+        success: true,
+        data: {
+          user: {
+            email,
+            onboardingProfile: localUser?.onboardingProfile ?? null,
+            cycles:            stored.cycles   ?? [],
+            logs:              stored.logs     ?? [],
+            bpLogs:            stored.bpLogs   ?? [],
+            reminderSettings:  stored.settings ?? {},
+          },
+          stats,
+        },
+      });
+    }
+
+    // Fallback: local dev ServerStorage
     const user = ServerStorage.getUser(email);
     if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'User not found on server' },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: 'User not found' }, { status: 404 });
     }
 
-    // Hydrate DataRepository with this user's records
-    DataRepository.loadUserData(user);
+    DataRepository.loadUserData(user, email);
     const stats = DataRepository.getCycleStats();
 
     return NextResponse.json({
       success: true,
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          onboardingProfile: user.onboardingProfile,
-          cycles: user.cycles,
-          logs: user.logs,
-          bpLogs: user.bpLogs,
-          reminderSettings: user.reminderSettings,
-        },
-        stats,
-      },
+      data: { user, stats },
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to sync user data' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
@@ -56,38 +69,31 @@ export async function POST(req: Request) {
     const { action = 'sync', email, password, name } = body;
 
     if (!email) {
-      return NextResponse.json(
-        { success: false, error: 'Email is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'Email is required' }, { status: 400 });
     }
 
     if (action === 'register') {
       const reg = ServerStorage.registerUser(email, password, name);
       if (reg.error && !reg.user) {
-        // If already exists, authenticate and sync
         const auth = ServerStorage.authenticateUser(email, password);
         if (auth.error) {
           return NextResponse.json({ success: false, error: auth.error }, { status: 400 });
         }
         const user = auth.user!;
-        DataRepository.loadUserData(user);
-        return NextResponse.json({
-          success: true,
-          data: { user, stats: DataRepository.getCycleStats() },
-        });
+        DataRepository.loadUserData(user, email);
+        return NextResponse.json({ success: true, data: { user, stats: DataRepository.getCycleStats() } });
       }
-
       const user = reg.user!;
       if (body.onboardingProfile || body.cycles) {
         ServerStorage.syncUserData(email, body);
+        // Also mirror to Supabase Storage
+        await dbMerge(email, {
+          cycles: body.cycles ?? [],
+          logs:   body.logs   ?? [],
+        });
       }
-      DataRepository.loadUserData(user);
-
-      return NextResponse.json({
-        success: true,
-        data: { user, stats: DataRepository.getCycleStats() },
-      });
+      DataRepository.loadUserData(user, email);
+      return NextResponse.json({ success: true, data: { user, stats: DataRepository.getCycleStats() } });
     }
 
     if (action === 'login') {
@@ -98,14 +104,29 @@ export async function POST(req: Request) {
           { status: 401 }
         );
       }
-
       const user = auth.user;
-      DataRepository.loadUserData(user);
-
-      return NextResponse.json({
-        success: true,
-        data: { user, stats: DataRepository.getCycleStats() },
-      });
+      // Load Supabase Storage data (richer, Vercel-safe)
+      const stored = await dbRead(email);
+      if (stored) {
+        DataRepository.loadUserData(
+          { cycles: stored.cycles ?? [], logs: stored.logs ?? [], bpLogs: stored.bpLogs ?? [] },
+          email
+        );
+        return NextResponse.json({
+          success: true,
+          data: {
+            user: {
+              ...user,
+              cycles:  stored.cycles  ?? user.cycles,
+              logs:    stored.logs    ?? user.logs,
+              bpLogs:  stored.bpLogs  ?? user.bpLogs,
+            },
+            stats: DataRepository.getCycleStats(),
+          },
+        });
+      }
+      DataRepository.loadUserData(user, email);
+      return NextResponse.json({ success: true, data: { user, stats: DataRepository.getCycleStats() } });
     }
 
     // Default: 'sync'
@@ -113,25 +134,29 @@ export async function POST(req: Request) {
       name,
       password,
       onboardingProfile: body.onboardingProfile,
-      cycles: body.cycles,
-      logs: body.logs,
-      bpLogs: body.bpLogs,
-      reminderSettings: body.reminderSettings,
+      cycles:            body.cycles,
+      logs:              body.logs,
+      bpLogs:            body.bpLogs,
+      reminderSettings:  body.reminderSettings,
     });
 
-    DataRepository.loadUserData(synced);
+    // Mirror to Supabase Storage
+    if (body.cycles || body.logs || body.bpLogs) {
+      await dbMerge(email, {
+        cycles:   body.cycles   ?? [],
+        logs:     body.logs     ?? [],
+        bpLogs:   body.bpLogs   ?? [],
+        settings: body.reminderSettings ?? {},
+      });
+    }
+
+    DataRepository.loadUserData(synced, email);
 
     return NextResponse.json({
       success: true,
-      data: {
-        user: synced,
-        stats: DataRepository.getCycleStats(),
-      },
+      data: { user: synced, stats: DataRepository.getCycleStats() },
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to process sync request' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

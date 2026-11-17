@@ -1,6 +1,29 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
+import { dbRead, dbMerge } from '@/lib/supabase-db';
 import { UserOnboardingProfile } from '@/types';
+
+async function hydrateUser(email: string) {
+  const stored = await dbRead(email);
+  if (stored) {
+    DataRepository.loadUserData(
+      {
+        cycles:  stored.cycles ?? [],
+        logs:    stored.logs   ?? [],
+        bpLogs:  stored.bpLogs ?? [],
+      },
+      email
+    );
+    return stored;
+  }
+  try {
+    const { ServerStorage } = await import('@/lib/server-storage');
+    const user = ServerStorage.getUser(email);
+    if (user) DataRepository.loadUserData(user, email);
+    return user;
+  } catch {}
+  return null;
+}
 
 export async function GET(req: Request) {
   try {
@@ -8,27 +31,38 @@ export async function GET(req: Request) {
     const email = searchParams.get('email');
 
     if (email) {
-      const { ServerStorage } = await import('@/lib/server-storage');
-      const user = ServerStorage.getUser(email);
-      if (user?.onboardingProfile) {
-        DataRepository.loadUserData(user);
-        return NextResponse.json({
-          success: true,
-          data: {
-            completed: Boolean(user.onboardingProfile.completed),
-            profile: user.onboardingProfile,
-          },
-        });
+      // Check Supabase Storage first
+      const stored = await dbRead(email);
+      if (stored) {
+        // Onboarding profile is stored separately - check ServerStorage or return completed if has cycles
+        const hasCycles = (stored.cycles ?? []).length > 0;
+        // Also try ServerStorage for onboarding profile
+        try {
+          const { ServerStorage } = await import('@/lib/server-storage');
+          const user = ServerStorage.getUser(email);
+          if (user?.onboardingProfile) {
+            DataRepository.loadUserData(user, email);
+            return NextResponse.json({
+              success: true,
+              data: { completed: true, profile: user.onboardingProfile },
+            });
+          }
+        } catch {}
+        // If user has cycle data stored, they completed onboarding
+        if (hasCycles) {
+          const profile = DataRepository.getOnboardingProfile();
+          return NextResponse.json({
+            success: true,
+            data: { completed: Boolean(profile?.completed), profile },
+          });
+        }
       }
     }
 
     const profile = DataRepository.getOnboardingProfile();
     return NextResponse.json({
       success: true,
-      data: {
-        completed: Boolean(profile?.completed),
-        profile,
-      },
+      data: { completed: Boolean(profile?.completed), profile },
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -48,12 +82,17 @@ export async function POST(req: Request) {
       cycleRegularity = 'REGULAR',
       primaryGoals = ['period_prediction'],
       dizzinessOrBpHistory = 'RARELY_NEVER',
+      email,
     } = body;
+
+    if (!lastPeriodStartDate) {
+      return NextResponse.json({ success: false, error: 'Last period start date required' }, { status: 400 });
+    }
 
     const profile: UserOnboardingProfile = {
       completed: true,
       lastPeriodStartDate,
-      typicalCycleLength: Number(typicalCycleLength) || 28,
+      typicalCycleLength:  Number(typicalCycleLength)  || 28,
       typicalPeriodLength: Number(typicalPeriodLength) || 5,
       cycleRegularity,
       primaryGoals,
@@ -61,17 +100,24 @@ export async function POST(req: Request) {
       completedAt: new Date().toISOString(),
     };
 
-    const result = DataRepository.saveOnboardingProfile(profile);
+    // Load any existing user data first to preserve BP logs etc.
+    if (email) await hydrateUser(email);
 
-    // Persist to ServerStorage for cross-device synchronization
-    const email = body.email;
+    const result = DataRepository.saveOnboardingProfile(profile);
+    const cycles = DataRepository.getCycles();
+    const logs   = DataRepository.getLogs();
+
+    // Persist to Supabase Storage (Vercel-safe)
     if (email) {
-      const { ServerStorage } = await import('@/lib/server-storage');
-      ServerStorage.syncUserData(email, {
-        onboardingProfile: profile,
-        cycles: DataRepository.getCycles(),
-        logs: DataRepository.getLogs(),
-      });
+      await dbMerge(email, { cycles, logs });
+    }
+
+    // Also persist to ServerStorage for local dev fallback
+    if (email) {
+      try {
+        const { ServerStorage } = await import('@/lib/server-storage');
+        ServerStorage.syncUserData(email, { onboardingProfile: profile, cycles, logs });
+      } catch {}
     }
 
     return NextResponse.json({
