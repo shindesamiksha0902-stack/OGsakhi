@@ -1,31 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 import { CycleEngine } from '@/services/cycle-engine';
-import { dbRead, dbMerge } from '@/lib/supabase-db';
-
-async function hydrateUser(email: string) {
-  const stored = await dbRead(email);
-  if (stored) {
-    DataRepository.loadUserData(
-      {
-        cycles:           stored.cycles   ?? [],
-        logs:             stored.logs     ?? [],
-        bpLogs:           stored.bpLogs   ?? [],
-        reminderSettings: Object.keys(stored.settings ?? {}).length > 0
-          ? (stored.settings as any)
-          : undefined,
-      },
-      email
-    );
-    return stored;
-  }
-  try {
-    const { ServerStorage } = await import('@/lib/server-storage');
-    const user = ServerStorage.getUser(email);
-    if (user) DataRepository.loadUserData(user, email);
-  } catch {}
-  return null;
-}
+import { dbMerge } from '@/lib/supabase-db';
+import { hydrateUser } from '@/lib/hydrate';
 
 // ─── GET /api/cycles ─────────────────────────────────────────────────────────
 export async function GET(req: Request) {

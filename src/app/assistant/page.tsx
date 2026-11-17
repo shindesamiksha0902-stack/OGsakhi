@@ -15,6 +15,7 @@ import {
   Heart,
   Droplet,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { StructuredAiResponse, DeviationSeverity, CycleStats } from '@/types';
 import { MEDICAL_SAFETY_DISCLAIMER } from '@/lib/constants';
 
@@ -29,6 +30,7 @@ interface ChatMessage {
 function AssistantContent() {
   const searchParams = useSearchParams();
   const queryParam = searchParams.get('q');
+  const { user } = useAuth();
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,7 +43,7 @@ function AssistantContent() {
       sender: 'assistant',
       structured: {
         what_i_noticed:
-          'Welcome to your personal wellness space! I have access to your 3 tracked cycles and recent daily check-ins.',
+          'Welcome to your personal wellness space! I have access to your tracked cycles and recent daily check-ins.',
         possible_explanation:
           'I can help you understand how your sleep, physical symptoms, mood, and lifestyle interconnect across different cycle phases.',
         what_you_can_try: [
@@ -57,12 +59,14 @@ function AssistantContent() {
   ]);
 
   useEffect(() => {
-    fetch('/api/cycles')
+    if (!user?.email) return;
+    const emailQuery = `?email=${encodeURIComponent(user.email)}`;
+    fetch(`/api/cycles${emailQuery}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setStats(data.data.stats);
       });
-  }, []);
+  }, [user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

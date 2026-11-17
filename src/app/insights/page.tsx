@@ -38,6 +38,7 @@ export default function InsightsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [cycles, setCycles] = useState<CycleRecord[]>([]);
+  const [logs, setLogs] = useState<DailyLogData[]>([]);
   const [stats, setStats] = useState<CycleStats | null>(null);
   const [patterns, setPatterns] = useState<DetectedPatternItem[]>([]);
   const [overallSeverity, setOverallSeverity] = useState<DeviationSeverity>('NORMAL');
@@ -48,23 +49,27 @@ export default function InsightsPage() {
       try {
         setLoading(true);
         const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
-        const [cyclesRes, patternsRes] = await Promise.all([
+        const [cyclesRes, patternsRes, logsRes] = await Promise.all([
           fetch(`/api/cycles${emailQuery}`),
           fetch(`/api/analytics/patterns${emailQuery}`),
+          fetch(`/api/logs${emailQuery}`),
         ]);
 
-        const cyclesJson = await cyclesRes.json();
+        const cyclesJson  = await cyclesRes.json();
         const patternsJson = await patternsRes.json();
+        const logsJson    = await logsRes.json();
 
         if (cyclesJson.success) {
           setCycles(cyclesJson.data.cycles);
           setStats(cyclesJson.data.stats);
         }
-
         if (patternsJson.success) {
           setPatterns(patternsJson.data.patterns);
           setOverallSeverity(patternsJson.data.overallSeverity);
           setBaselines(patternsJson.data.baselines);
+        }
+        if (logsJson.success) {
+          setLogs(logsJson.data ?? []);
         }
       } catch (err) {
         console.error(err);
@@ -76,7 +81,7 @@ export default function InsightsPage() {
     loadInsights();
   }, [user]);
 
-  // Data for Cycle Length Bar Chart
+  // ── Cycle length history chart ──────────────────────────────────────────────
   const cycleChartData = cycles
     .filter((c) => c.lengthDays)
     .map((c, idx) => ({
@@ -85,15 +90,111 @@ export default function InsightsPage() {
       period: c.periodDays || 5,
     }));
 
-  // Data for Phase-based Mood & Energy
-  const phaseComparisonData = [
-    { phase: 'Menstrual', energy: 2.1, mood: 2.5, sleep: 7.9 },
-    { phase: 'Follicular', energy: 4.2, mood: 4.4, sleep: 7.8 },
-    { phase: 'Ovulatory', energy: 4.8, mood: 4.6, sleep: 7.5 },
-    { phase: 'Luteal', energy: 2.6, mood: 2.8, sleep: 6.2 },
-  ];
+  // ── Phase comparison: energy & mood averaged from real logs ────────────────
+  const ENERGY_SCALE: Record<string, number> = {
+    VERY_LOW: 1, LOW: 2, NORMAL: 3, HIGH: 4, VERY_HIGH: 5,
+  };
+  const MOOD_SCALE: Record<string, number> = {
+    Low: 1, Irritated: 2, Neutral: 3, Calm: 4, Happy: 5,
+  };
+  const PHASE_ORDER = ['Menstrual', 'Follicular', 'Ovulatory', 'Luteal'];
 
-  // Top symptoms data
+  function getPhaseForCycleDay(day: number): string {
+    if (day <= 5)  return 'Menstrual';
+    if (day <= 13) return 'Follicular';
+    if (day <= 16) return 'Ovulatory';
+    return 'Luteal';
+  }
+
+  const phaseComparisonData = (() => {
+    if (logs.length < 5 || cycles.length === 0) return [];
+
+    // For each log find its cycle day by comparing to the nearest cycle start
+    const sortedCycles = [...cycles].sort(
+      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    );
+
+    const phaseBuckets: Record<string, { energy: number[]; mood: number[] }> = {
+      Menstrual:  { energy: [], mood: [] },
+      Follicular: { energy: [], mood: [] },
+      Ovulatory:  { energy: [], mood: [] },
+      Luteal:     { energy: [], mood: [] },
+    };
+
+    logs.forEach((log) => {
+      const logDate = new Date(log.date).getTime();
+      // Find the cycle this log belongs to (closest start date before the log)
+      let matchedCycle = sortedCycles.find((c) => {
+        const start = new Date(c.startDate).getTime();
+        const end   = c.cycleEndDate
+          ? new Date(c.cycleEndDate).getTime()
+          : start + 35 * 86400000;
+        return logDate >= start && logDate <= end;
+      });
+      if (!matchedCycle) return;
+
+      const cycleDay = Math.floor(
+        (logDate - new Date(matchedCycle.startDate).getTime()) / 86400000
+      ) + 1;
+      const phase = getPhaseForCycleDay(cycleDay);
+
+      if (log.energyLevel && ENERGY_SCALE[log.energyLevel] !== undefined) {
+        phaseBuckets[phase].energy.push(ENERGY_SCALE[log.energyLevel]);
+      }
+      if (log.moodPrimary && MOOD_SCALE[log.moodPrimary] !== undefined) {
+        phaseBuckets[phase].mood.push(MOOD_SCALE[log.moodPrimary]);
+      }
+    });
+
+    const avg = (arr: number[]) =>
+      arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : null;
+
+    return PHASE_ORDER
+      .map((phase) => ({
+        phase,
+        energy: avg(phaseBuckets[phase].energy),
+        mood:   avg(phaseBuckets[phase].mood),
+      }))
+      .filter((p) => p.energy !== null || p.mood !== null);
+  })();
+
+  // ── Lifestyle observations computed from real logs ─────────────────────────
+  const lifestyleObs = (() => {
+    if (logs.length < 5) return null;
+
+    // Hydration vs headache
+    const lowWaterWithHeadache = logs.filter(
+      (l) => (l.waterIntakeMl ?? 2000) < 1500 &&
+              (l.symptoms ?? []).some((s: any) =>
+                (typeof s === 'string' ? s : s.symptomName ?? '').toLowerCase().includes('headache'))
+    ).length;
+    const lowWaterDays = logs.filter((l) => (l.waterIntakeMl ?? 2000) < 1500).length;
+    const hydrationRate = lowWaterDays > 0
+      ? Math.round((lowWaterWithHeadache / lowWaterDays) * 100)
+      : 0;
+
+    // Sleep vs energy
+    const lowSleepLowEnergy = logs.filter(
+      (l) => (l.sleepHours ?? 7) < 6.5 && ['LOW', 'VERY_LOW'].includes(l.energyLevel ?? '')
+    ).length;
+    const lowSleepDays = logs.filter((l) => (l.sleepHours ?? 7) < 6.5).length;
+    const sleepEnergyRate = lowSleepDays > 0
+      ? Math.round((lowSleepLowEnergy / lowSleepDays) * 100)
+      : 0;
+
+    // Exercise vs mood
+    const activeGoodMood = logs.filter(
+      (l) => (l.exerciseMinutes ?? 0) >= 20 && ['Calm', 'Happy'].includes(l.moodPrimary ?? '')
+    ).length;
+    const activeDays = logs.filter((l) => (l.exerciseMinutes ?? 0) >= 20).length;
+    const exerciseMoodRate = activeDays > 0
+      ? Math.round((activeGoodMood / activeDays) * 100)
+      : 0;
+
+    return { hydrationRate, sleepEnergyRate, exerciseMoodRate, lowWaterDays, lowSleepDays, activeDays };
+  })();
+
+  // ── Symptom frequency ──────────────────────────────────────────────────────
   const symptomData = baselines?.topSymptoms || [];
 
   const getSeverityPill = (sev: DeviationSeverity) => {
@@ -391,7 +492,7 @@ export default function InsightsPage() {
             Observations reflect recurring correlations, not medical causes
           </p>
 
-          {cycles.length === 0 ? (
+          {cycles.length === 0 || !lifestyleObs ? (
             <div className="p-6 text-center text-xs text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
               Correlations (hydration, sleep &amp; stamina) will automatically appear as you log daily check-ins.
             </div>
@@ -402,7 +503,11 @@ export default function InsightsPage() {
                   <Droplet className="w-3.5 h-3.5" /> Hydration &amp; Headaches
                 </span>
                 <p className="text-slate-600 leading-relaxed">
-                  You tend to report headaches on days when water intake falls below 1400 ml.
+                  {lifestyleObs.lowWaterDays === 0
+                    ? 'You have been staying well hydrated — no low-water days detected.'
+                    : lifestyleObs.hydrationRate >= 40
+                    ? `On ${lifestyleObs.hydrationRate}% of your low-hydration days (under 1500 ml) you also logged a headache. Drinking more water may help reduce headache frequency.`
+                    : `You had ${lifestyleObs.lowWaterDays} low-hydration days. Headache correlation is low — keep maintaining good water intake.`}
                 </p>
               </div>
 
@@ -411,7 +516,11 @@ export default function InsightsPage() {
                   <Moon className="w-3.5 h-3.5" /> Sleep &amp; Energy
                 </span>
                 <p className="text-slate-600 leading-relaxed">
-                  Nights with under 6.5 hours of sleep are followed by a 40% higher frequency of low energy ratings.
+                  {lifestyleObs.lowSleepDays === 0
+                    ? 'You have consistently slept over 6.5 hours — great sleep hygiene!'
+                    : lifestyleObs.sleepEnergyRate >= 40
+                    ? `On ${lifestyleObs.sleepEnergyRate}% of your nights under 6.5 hours, you logged low energy the next day. Prioritising sleep in the luteal phase especially may help.`
+                    : `You had ${lifestyleObs.lowSleepDays} short-sleep nights. Your energy levels appear resilient — good job!`}
                 </p>
               </div>
 
@@ -420,7 +529,11 @@ export default function InsightsPage() {
                   <Zap className="w-3.5 h-3.5" /> Exercise &amp; Mood
                 </span>
                 <p className="text-slate-600 leading-relaxed">
-                  Days with 20+ minutes of gentle movement consistently correlate with calm or happy mood logs.
+                  {lifestyleObs.activeDays === 0
+                    ? 'Log your exercise minutes to track how movement influences your mood across phases.'
+                    : lifestyleObs.exerciseMoodRate >= 50
+                    ? `On ${lifestyleObs.exerciseMoodRate}% of your active days (20+ mins movement) you logged a calm or happy mood. Regular gentle exercise appears to positively influence your wellbeing.`
+                    : `You had ${lifestyleObs.activeDays} active days. Keep logging to build a clearer mood-exercise pattern over time.`}
                 </p>
               </div>
             </div>

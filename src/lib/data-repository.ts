@@ -1,4 +1,4 @@
-﻿import {
+import {
   CycleRecord,
   DailyLogData,
   DetectedPatternItem,
@@ -155,11 +155,24 @@ export class DataRepository {
   ) {
     const email = overrideEmail || memoryStore.activeUserEmail;
     if (email) {
+      // ServerStorage — local dev fallback (fire-and-forget)
       try {
         ServerStorage.syncUserData(email, data);
       } catch (err) {
-        console.warn('Failed to persist active user data:', err);
+        console.warn('ServerStorage persist failed:', err);
       }
+      // Supabase Storage — Vercel-safe, async (import to avoid circular)
+      import('@/lib/supabase-db').then(({ dbMerge }) => {
+        const patch: Record<string, any> = {};
+        if (data.cycles            !== undefined) patch.cycles            = data.cycles;
+        if (data.logs              !== undefined) patch.logs              = data.logs;
+        if (data.bpLogs            !== undefined) patch.bpLogs            = data.bpLogs;
+        if (data.onboardingProfile !== undefined) patch.onboardingProfile = data.onboardingProfile;
+        if (data.reminderSettings  !== undefined) patch.settings          = data.reminderSettings;
+        if (Object.keys(patch).length > 0) {
+          dbMerge(email, patch).catch((e) => console.warn('Supabase persist failed:', e));
+        }
+      }).catch(() => {});
     }
   }
 

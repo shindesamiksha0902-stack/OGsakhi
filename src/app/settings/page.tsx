@@ -177,9 +177,10 @@ export default function SettingsPage() {
 
   const handleExportData = async () => {
     try {
+      const emailQuery = user?.email ? `?email=${encodeURIComponent(user.email)}` : '';
       const [cyclesRes, logsRes] = await Promise.all([
-        fetch('/api/cycles'),
-        fetch('/api/logs'),
+        fetch(`/api/cycles${emailQuery}`),
+        fetch(`/api/logs${emailQuery}`),
       ]);
       const cycles = await cyclesRes.json();
       const logs = await logsRes.json();

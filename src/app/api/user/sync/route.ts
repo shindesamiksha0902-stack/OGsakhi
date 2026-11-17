@@ -17,24 +17,23 @@ export async function GET(req: Request) {
     if (stored) {
       DataRepository.loadUserData(
         {
-          cycles:           stored.cycles   ?? [],
-          logs:             stored.logs     ?? [],
-          bpLogs:           stored.bpLogs   ?? [],
-          reminderSettings: Object.keys(stored.settings ?? {}).length > 0
+          cycles:            stored.cycles            ?? [],
+          logs:              stored.logs              ?? [],
+          bpLogs:            stored.bpLogs            ?? [],
+          onboardingProfile: stored.onboardingProfile ?? null,
+          reminderSettings:  Object.keys(stored.settings ?? {}).length > 0
             ? (stored.settings as any)
             : undefined,
         },
         email
       );
       const stats = DataRepository.getCycleStats();
-      // Also load from ServerStorage to get onboardingProfile (stored there)
-      const localUser = ServerStorage.getUser(email);
       return NextResponse.json({
         success: true,
         data: {
           user: {
             email,
-            onboardingProfile: localUser?.onboardingProfile ?? null,
+            onboardingProfile: stored.onboardingProfile ?? null,
             cycles:            stored.cycles   ?? [],
             logs:              stored.logs     ?? [],
             bpLogs:            stored.bpLogs   ?? [],

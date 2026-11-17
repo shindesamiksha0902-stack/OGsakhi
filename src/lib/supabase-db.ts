@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { BloodPressureLog, ReminderSettings, CycleRecord, DailyLogData } from '@/types';
+import { BloodPressureLog, ReminderSettings, CycleRecord, DailyLogData, UserOnboardingProfile } from '@/types';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,19 +18,21 @@ const supabase = createClient(
 const BUCKET = 'sakhi-userdata';
 
 export type UserData = {
-  bpLogs:   BloodPressureLog[];
-  cycles:   CycleRecord[];
-  logs:     DailyLogData[];
-  settings: Partial<ReminderSettings>;
-  updatedAt: string;
+  bpLogs:            BloodPressureLog[];
+  cycles:            CycleRecord[];
+  logs:              DailyLogData[];
+  settings:          Partial<ReminderSettings>;
+  onboardingProfile: UserOnboardingProfile | null;
+  updatedAt:         string;
 };
 
 const DEFAULT_DATA: UserData = {
-  bpLogs:    [],
-  cycles:    [],
-  logs:      [],
-  settings:  {},
-  updatedAt: new Date().toISOString(),
+  bpLogs:            [],
+  cycles:            [],
+  logs:              [],
+  settings:          {},
+  onboardingProfile: null,
+  updatedAt:         new Date().toISOString(),
 };
 
 function emailToPath(email: string): string {
@@ -97,11 +99,12 @@ export async function dbWrite(email: string, data: UserData): Promise<boolean> {
 export async function dbMerge(email: string, patch: Partial<UserData>): Promise<UserData> {
   const current = (await dbRead(email)) ?? { ...DEFAULT_DATA };
   const merged: UserData = {
-    bpLogs:    patch.bpLogs    ?? current.bpLogs,
-    cycles:    patch.cycles    ?? current.cycles,
-    logs:      patch.logs      ?? current.logs,
-    settings:  patch.settings  !== undefined ? { ...current.settings, ...patch.settings } : current.settings,
-    updatedAt: new Date().toISOString(),
+    bpLogs:            patch.bpLogs            ?? current.bpLogs,
+    cycles:            patch.cycles            ?? current.cycles,
+    logs:              patch.logs              ?? current.logs,
+    settings:          patch.settings !== undefined ? { ...current.settings, ...patch.settings } : current.settings,
+    onboardingProfile: patch.onboardingProfile !== undefined ? patch.onboardingProfile : (current.onboardingProfile ?? null),
+    updatedAt:         new Date().toISOString(),
   };
   await dbWrite(email, merged);
   return merged;

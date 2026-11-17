@@ -1,29 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 import { dbRead, dbMerge } from '@/lib/supabase-db';
+import { hydrateUser } from '@/lib/hydrate';
 import { UserOnboardingProfile } from '@/types';
-
-async function hydrateUser(email: string) {
-  const stored = await dbRead(email);
-  if (stored) {
-    DataRepository.loadUserData(
-      {
-        cycles:  stored.cycles ?? [],
-        logs:    stored.logs   ?? [],
-        bpLogs:  stored.bpLogs ?? [],
-      },
-      email
-    );
-    return stored;
-  }
-  try {
-    const { ServerStorage } = await import('@/lib/server-storage');
-    const user = ServerStorage.getUser(email);
-    if (user) DataRepository.loadUserData(user, email);
-    return user;
-  } catch {}
-  return null;
-}
 
 export async function GET(req: Request) {
   try {
@@ -31,25 +10,26 @@ export async function GET(req: Request) {
     const email = searchParams.get('email');
 
     if (email) {
-      // Check Supabase Storage first
       const stored = await dbRead(email);
       if (stored) {
-        // Onboarding profile is stored separately - check ServerStorage or return completed if has cycles
-        const hasCycles = (stored.cycles ?? []).length > 0;
-        // Also try ServerStorage for onboarding profile
-        try {
-          const { ServerStorage } = await import('@/lib/server-storage');
-          const user = ServerStorage.getUser(email);
-          if (user?.onboardingProfile) {
-            DataRepository.loadUserData(user, email);
-            return NextResponse.json({
-              success: true,
-              data: { completed: true, profile: user.onboardingProfile },
-            });
-          }
-        } catch {}
-        // If user has cycle data stored, they completed onboarding
-        if (hasCycles) {
+        // Return stored onboardingProfile from Supabase Storage
+        if (stored.onboardingProfile?.completed) {
+          DataRepository.loadUserData(
+            {
+              cycles:            stored.cycles            ?? [],
+              logs:              stored.logs              ?? [],
+              bpLogs:            stored.bpLogs            ?? [],
+              onboardingProfile: stored.onboardingProfile,
+            },
+            email
+          );
+          return NextResponse.json({
+            success: true,
+            data: { completed: true, profile: stored.onboardingProfile },
+          });
+        }
+        // Has cycle data but no profile stored — treat as completed
+        if ((stored.cycles ?? []).length > 0) {
           const profile = DataRepository.getOnboardingProfile();
           return NextResponse.json({
             success: true,
@@ -107,9 +87,9 @@ export async function POST(req: Request) {
     const cycles = DataRepository.getCycles();
     const logs   = DataRepository.getLogs();
 
-    // Persist to Supabase Storage (Vercel-safe)
+    // Persist to Supabase Storage — includes onboardingProfile now (Vercel-safe)
     if (email) {
-      await dbMerge(email, { cycles, logs });
+      await dbMerge(email, { cycles, logs, onboardingProfile: profile });
     }
 
     // Also persist to ServerStorage for local dev fallback

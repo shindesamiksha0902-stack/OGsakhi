@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DataRepository } from '@/lib/data-repository';
 import { AiService } from '@/services/ai-service';
-import { dbRead } from '@/lib/supabase-db';
+import { hydrateUser } from '@/lib/hydrate';
 
 export async function POST(req: Request) {
   try {
@@ -12,26 +12,9 @@ export async function POST(req: Request) {
     }
 
     // Hydrate from Supabase Storage first (Vercel-safe)
-    if (email) {
-      const stored = await dbRead(email);
-      if (stored) {
-        DataRepository.loadUserData(
-          {
-            cycles:  stored.cycles  ?? [],
-            logs:    stored.logs    ?? [],
-            bpLogs:  stored.bpLogs  ?? [],
-          },
-          email
-        );
-      } else {
-        // Local dev fallback
-        try {
-          const { ServerStorage } = await import('@/lib/server-storage');
-          const user = ServerStorage.getUser(email);
-          if (user) DataRepository.loadUserData(user, email);
-        } catch {}
-      }
-    }
+    if (email) await hydrateUser(email);
+
+
 
     if (incomingProfile && !DataRepository.getOnboardingProfile()) {
       DataRepository.saveOnboardingProfile(incomingProfile);

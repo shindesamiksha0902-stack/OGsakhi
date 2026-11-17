@@ -1,36 +1,11 @@
 import { NextResponse } from 'next/server';
 import { classifyBloodPressure, analyzeBloodPressure } from '@/lib/bp-engine';
 import { DataRepository } from '@/lib/data-repository';
-import { dbRead, dbWrite, dbMerge, dedupeBpLogs } from '@/lib/supabase-db';
+import { dbMerge, dedupeBpLogs } from '@/lib/supabase-db';
+import { hydrateUser } from '@/lib/hydrate';
 import { BloodPressureLog } from '@/types';
 
-/** Load user's full data from Storage into DataRepository memory */
-async function hydrateUser(email: string) {
-  // Try Supabase Storage first (works on Vercel)
-  const stored = await dbRead(email);
-  if (stored) {
-    DataRepository.loadUserData(
-      {
-        cycles:           stored.cycles   ?? [],
-        logs:             stored.logs     ?? [],
-        bpLogs:           stored.bpLogs   ?? [],
-        reminderSettings: Object.keys(stored.settings ?? {}).length > 0
-          ? (stored.settings as any)
-          : undefined,
-      },
-      email
-    );
-    return stored;
-  }
 
-  // Fallback: local ServerStorage (dev only)
-  try {
-    const { ServerStorage } = await import('@/lib/server-storage');
-    const user = ServerStorage.getUser(email);
-    if (user) DataRepository.loadUserData(user, email);
-  } catch {}
-  return null;
-}
 
 // ─── GET  /api/bp?email=... ───────────────────────────────────────────────────
 export async function GET(req: Request) {
