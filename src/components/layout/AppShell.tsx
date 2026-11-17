@@ -41,6 +41,12 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, []);
 
+  useEffect(() => {
+    const handler = () => handleOpenLog();
+    window.addEventListener('sakhi_open_log', handler);
+    return () => window.removeEventListener('sakhi_open_log', handler);
+  }, []);
+
   const navItems = [
     { label: 'Today', href: '/', icon: Home },
     { label: 'Calendar', href: '/calendar', icon: Calendar },

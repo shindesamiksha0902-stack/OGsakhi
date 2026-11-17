@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     const email = searchParams.get('email');
 
     if (email) {
-      const stored = await hydrateUser(email);
+      const stored = await hydrateUser(email) as any;
       if (stored?.settings && Object.keys(stored.settings).length > 0) {
         DataRepository.updateReminderSettings(stored.settings as ReminderSettings, email);
       }

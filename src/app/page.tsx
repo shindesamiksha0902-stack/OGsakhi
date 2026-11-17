@@ -6,6 +6,7 @@ import { ForecastTimeline } from '@/components/dashboard/ForecastTimeline';
 import { MetricCards } from '@/components/dashboard/MetricCards';
 import { InsightHighlights } from '@/components/dashboard/InsightHighlights';
 import { QuickAskAi } from '@/components/dashboard/QuickAskAi';
+import { QuickCheckIn } from '@/components/dashboard/QuickCheckIn';
 import { DailyLogDrawer } from '@/components/logging/DailyLogDrawer';
 import { CycleStats, DailyLogData, DetectedPatternItem, DeviationSeverity } from '@/types';
 import { toISODate } from '@/lib/date-utils';
@@ -220,6 +221,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* 0. Quick Daily Check-in */}
+      <QuickCheckIn onSaved={fetchData} />
+
       {/* 1. Cycle Hero Status Card */}
       {stats && (
         <>
