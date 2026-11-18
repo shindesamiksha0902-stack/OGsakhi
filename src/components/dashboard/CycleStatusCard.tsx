@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { CycleStats, DailyRhythmGoal } from '@/types';
 import { PHASE_INFO } from '@/lib/constants';
 import { CheckCircle2, Circle, Target } from 'lucide-react';
+import Link from 'next/link';
 
 interface CycleStatusCardProps {
   stats: CycleStats;
@@ -157,12 +158,18 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
               <div className="flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-sakhi-600" />
                 <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  Today's Suggested Goals (Studied from Recent Check-ins)
+                  Today's Daily Rhythm & Suggestions
                 </span>
               </div>
-              <span className="text-[10px] text-slate-400">
-                {dailyGoals.filter((g) => isGoalDone(g)).length} of {dailyGoals.length} completed
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400">
+                  {dailyGoals.filter((g) => isGoalDone(g)).length} of {dailyGoals.length} checked
+                </span>
+                <span className="text-slate-300">•</span>
+                <Link href="/settings" className="text-[10px] text-sakhi-600 hover:text-sakhi-700 font-semibold underline">
+                  Customise
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -200,6 +207,8 @@ export function CycleStatusCard({ stats, dailyGoals = [], onOpenLog }: CycleStat
                               ? 'bg-sky-100 text-sky-800'
                               : goal.category === 'hydration'
                               ? 'bg-blue-100 text-blue-800'
+                              : goal.category === 'rest'
+                              ? 'bg-rose-100 text-rose-800'
                               : 'bg-indigo-100 text-indigo-800'
                           }`}
                         >

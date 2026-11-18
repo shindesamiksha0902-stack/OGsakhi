@@ -6,6 +6,7 @@ import {
   DailyLogData,
   DailyRhythmGoal,
   BloodPressureLog,
+  ReminderSettings,
 } from '@/types';
 import { daysBetween, toISODate, addDaysToDate } from '@/lib/date-utils';
 
@@ -178,7 +179,8 @@ export class CycleEngine {
   static generateDailyRhythmGoals(
     recentLogs: DailyLogData[],
     phase: CyclePhase,
-    bpLogs: BloodPressureLog[] = []
+    bpLogs: BloodPressureLog[] = [],
+    settings?: ReminderSettings
   ): DailyRhythmGoal[] {
     const goals: DailyRhythmGoal[] = [];
     const todayStr = toISODate(new Date());
@@ -194,15 +196,172 @@ export class CycleEngine {
     const recentBp = bpLogs.slice(0, 3);
     const todayBp = bpLogs.find((b) => b.date === todayStr);
 
-    // 1. MEALS & NUTRITION GOAL (Adapts dynamically to today's logged meal status)
-    if (todayLog?.mealsStatus === 'ON_TIME') {
+    // User customized wellness targets (with safe, gentle defaults)
+    const targetSleepHours = settings?.targetSleepHours ?? 7.5;
+    const targetWaterMl = settings?.targetWaterMl ?? 2000;
+    const activityStyle = settings?.activityStyle ?? 'gentle';
+
+    // ─── 1. REST & RECOVERY (Conditional 1st priority when cramps, fatigue, or heavy flow logged) ───
+    const severeCramps = (todayLog?.crampSeverity ?? 0) >= 3;
+    const heavyFlow = todayLog?.flowIntensity === 'HEAVY';
+    const reportedFatigue =
+      todayLog?.symptoms?.some((s) => /fatigue|exhaust|tired|letharg|weak/i.test(s.symptomName)) ||
+      pastThreeDays.some((l) => l.symptoms?.some((s) => /fatigue|exhaust/i.test(s.symptomName)));
+
+    if (severeCramps) {
+      goals.push({
+        id: 'goal-rest-cramps',
+        category: 'rest',
+        icon: '🪷',
+        tag: 'Rest & Recovery',
+        title: 'Warm compress & restorative rest',
+        reason: 'Elevated cramps recorded today. A warm compress or resting with feet elevated may offer soothing comfort.',
+      });
+    } else if (heavyFlow || reportedFatigue) {
+      goals.push({
+        id: 'goal-rest-fatigue',
+        category: 'rest',
+        icon: '🌿',
+        tag: 'Rest & Recovery',
+        title: 'Allow yourself an unhurried rest pause',
+        reason: heavyFlow
+          ? 'Heavier flow noted today. Honor your body’s natural rhythm and allow space for unhurried rest.'
+          : 'Fatigue noted in your recent logs. Give yourself permission to pause and take things at a gentle tempo.',
+      });
+    }
+
+    // ─── 2. SLEEP & REST ROUTINES (Adapts to recent sleep quality, duration, and target) ───
+    const validSleepLogs = [todayLog, ...pastThreeDays].filter(
+      (l): l is DailyLogData => typeof l?.sleepHours === 'number' && l.sleepHours > 0
+    );
+    const avgSleep =
+      validSleepLogs.length > 0
+        ? validSleepLogs.reduce((acc, l) => acc + (l.sleepHours || 0), 0) / validSleepLogs.length
+        : targetSleepHours;
+
+    const hadPoorSleep =
+      (todayLog?.sleepHours !== undefined && todayLog?.sleepHours !== null && todayLog.sleepHours < 6.5) ||
+      (todayLog?.sleepQuality !== undefined && todayLog?.sleepQuality !== null && todayLog.sleepQuality <= 2) ||
+      avgSleep < 6.5 ||
+      pastThreeDays.some((l) => (l.sleepQuality && l.sleepQuality <= 2) || (l.sleepHours && l.sleepHours < 6));
+
+    const todaySleepReached =
+      typeof todayLog?.sleepHours === 'number' && todayLog.sleepHours >= targetSleepHours;
+
+    if (todaySleepReached) {
+      goals.push({
+        id: 'goal-sleep',
+        category: 'sleep',
+        icon: '🌙',
+        tag: 'Rest & Sleep',
+        title: `Target rest logged (${todayLog!.sleepHours} hrs)`,
+        reason: 'Restorative rest logged! Maintain a screen-free wind-down routine tonight.',
+        completed: true,
+      });
+    } else if (hadPoorSleep) {
+      goals.push({
+        id: 'goal-sleep',
+        category: 'sleep',
+        icon: '🌙',
+        tag: 'Rest & Sleep',
+        title: 'Consistent, screen-free wind-down',
+        reason: 'You reported poor sleep recently. Consider maintaining a consistent bedtime tonight.',
+      });
+    } else {
+      goals.push({
+        id: 'goal-sleep',
+        category: 'sleep',
+        icon: '🌙',
+        tag: 'Rest & Sleep',
+        title: `Aim for ${targetSleepHours}+ hrs quality rest`,
+        reason: 'Consistent, restful sleep supports mental clarity and steady vitality.',
+      });
+    }
+
+    // ─── 3. HYDRATION (Adapts to target, intake, and headache correlations) ───
+    const todayWater = todayLog?.waterIntakeMl ?? 0;
+    const hadRecentHeadache =
+      todayLog?.symptoms?.some((s) => s.symptomName.toLowerCase().includes('headache')) ||
+      pastThreeDays.some((l) =>
+        l.symptoms?.some((s) => s.symptomName.toLowerCase().includes('headache'))
+      );
+
+    if (todayWater >= targetWaterMl) {
+      goals.push({
+        id: 'goal-hydration',
+        category: 'hydration',
+        icon: '💧',
+        tag: 'Hydration Goal',
+        title: `Hydration goal reached (${todayWater} ml)`,
+        reason: 'Great job keeping your body refreshed and well hydrated today.',
+        completed: true,
+      });
+    } else if (hadRecentHeadache && todayWater < Math.min(1500, targetWaterMl)) {
+      goals.push({
+        id: 'goal-hydration',
+        category: 'hydration',
+        icon: '💧',
+        tag: 'Hydration & Relief',
+        title: 'Sip water regularly to ease tension',
+        reason: 'You logged a headache recently and lower water intake today. Drinking water steadily may help ease tension.',
+      });
+    } else if (todayWater > 0) {
+      const remaining = Math.max(250, targetWaterMl - todayWater);
+      goals.push({
+        id: 'goal-hydration',
+        category: 'hydration',
+        icon: '💧',
+        tag: 'Hydration Goal',
+        title: `Drink ~${remaining} ml more water today`,
+        reason: `${todayWater} ml logged today — reaching your ${targetWaterMl} ml target helps prevent fatigue and keeps energy steady.`,
+      });
+    } else if ((yesterday?.waterIntakeMl ?? targetWaterMl) < targetWaterMl - 400) {
+      goals.push({
+        id: 'goal-hydration',
+        category: 'hydration',
+        icon: '💧',
+        tag: 'Hydration Goal',
+        title: `Target ${targetWaterMl} ml steady intake`,
+        reason: 'Hydration was below target yesterday. Starting your day with water refreshes vitality and eases physical tension.',
+      });
+    } else {
+      goals.push({
+        id: 'goal-hydration',
+        category: 'hydration',
+        icon: '💧',
+        tag: 'Hydration Goal',
+        title: `Keep water intake steady (~${targetWaterMl} ml)`,
+        reason: 'Refreshes cellular energy, supports circulation, and balances body comfort.',
+      });
+    }
+
+    // ─── 4. NUTRITION & MEAL HABITS (Adapts to meals status, pacing & energy) ───
+    const isLowEnergy =
+      todayLog?.energyLevel === 'LOW' ||
+      todayLog?.energyLevel === 'VERY_LOW' ||
+      yesterday?.energyLevel === 'LOW' ||
+      yesterday?.energyLevel === 'VERY_LOW';
+
+    const skippedOrDelayedMeal =
+      todayLog?.mealsStatus === 'SKIPPED' || todayLog?.mealsStatus === 'DELAYED';
+
+    if (skippedOrDelayedMeal && isLowEnergy) {
+      goals.push({
+        id: 'goal-meals',
+        category: 'meals',
+        icon: '🥗',
+        tag: 'Nourishment',
+        title: 'Have a light, wholesome snack',
+        reason: 'Low energy and skipped meals can reinforce each other. Consider having a light, nourishing snack to steady your pace.',
+      });
+    } else if (todayLog?.mealsStatus === 'ON_TIME') {
       goals.push({
         id: 'goal-meals',
         category: 'meals',
         icon: '🥗',
         tag: 'Meals On Track',
-        title: 'Meals on time today',
-        reason: 'You logged meals on time! Sustaining steady metabolic energy & hormonal balance',
+        title: 'Meals on schedule today',
+        reason: 'Regular meals logged on time! Keeping regular intervals supports steady energy.',
         completed: true,
       });
     } else if (todayLog?.mealsStatus === 'SKIPPED') {
@@ -211,8 +370,8 @@ export class CycleEngine {
         category: 'meals',
         icon: '🥗',
         tag: 'Meal Alert',
-        title: 'Have a wholesome snack now',
-        reason: 'Skipped a meal earlier today — nourish your body to prevent an energy or BP slump',
+        title: 'Nourish with a wholesome snack',
+        reason: 'Skipped a meal earlier — pausing for a light bite helps prevent an afternoon energy slump.',
       });
     } else if (todayLog?.mealsStatus === 'DELAYED') {
       goals.push({
@@ -220,22 +379,20 @@ export class CycleEngine {
         category: 'meals',
         icon: '🥗',
         tag: 'Meal Pacing',
-        title: 'Have dinner on schedule tonight',
-        reason: 'Lunch was delayed today — eating dinner on time supports restorative sleep',
+        title: 'Enjoy dinner at a regular time tonight',
+        reason: 'Lunch was delayed today. Keeping regular meal intervals helps support restorative sleep.',
       });
     } else if (
       yesterday?.mealsStatus === 'SKIPPED' ||
-      yesterday?.mealsStatus === 'DELAYED' ||
-      yesterday?.notes?.toLowerCase().includes('missed') ||
-      yesterday?.notes?.toLowerCase().includes('skipped')
+      yesterday?.mealsStatus === 'DELAYED'
     ) {
       goals.push({
         id: 'goal-meals',
         category: 'meals',
         icon: '🥗',
-        tag: 'Meals on Time',
-        title: 'Have meals on schedule today',
-        reason: 'Missed or delayed meals yesterday — eating on time prevents energy dips & cravings',
+        tag: 'Steady Meals',
+        title: 'Enjoy steady, unhurried meals today',
+        reason: 'Meals were irregular yesterday — consistent intervals help sustain even energy and comfort.',
       });
     } else {
       goals.push({
@@ -244,69 +401,11 @@ export class CycleEngine {
         icon: '🥗',
         tag: 'Nourishment',
         title: 'Enjoy steady, balanced meals',
-        reason:
-          phase === 'Luteal'
-            ? 'Stabilizes blood sugar and progesterone as your cycle winds down'
-            : 'Sustains rising energy and metabolic vitality',
+        reason: 'Consistent meals with whole foods and fiber support steady energy throughout your day.',
       });
     }
 
-    // 2. MOOD & STRESS ("STAY CALM") GOAL (Adapts to today's logged stress & emotions)
-    const todayHighStress =
-      todayLog &&
-      ((todayLog.stressLevel || 0) >= 3 ||
-        ['Stressed', 'Anxious', 'Irritated', 'Low'].includes(todayLog.moodPrimary || ''));
-
-    const todayCalm =
-      todayLog &&
-      (todayLog.moodPrimary === 'Calm' || todayLog.moodPrimary === 'Happy') &&
-      (todayLog.stressLevel || 0) <= 2;
-
-    const yesterdayHighStress =
-      yesterday &&
-      ((yesterday.stressLevel && yesterday.stressLevel >= 3) ||
-        ['Stressed', 'Anxious', 'Irritated', 'Low'].includes(yesterday.moodPrimary || ''));
-
-    if (todayHighStress) {
-      goals.push({
-        id: 'goal-mood',
-        category: 'mood',
-        icon: '🧘',
-        tag: 'Stay Calm',
-        title: 'Take a 5-min mindful pause',
-        reason: 'Stress was logged as elevated today — gentle deep breathing resets your nervous system',
-      });
-    } else if (todayCalm) {
-      goals.push({
-        id: 'goal-mood',
-        category: 'mood',
-        icon: '😌',
-        tag: 'Calm & Grounded',
-        title: 'Protect your peace & calm',
-        reason: 'Calm mood logged today! Take a moment to appreciate this smooth flow',
-        completed: true,
-      });
-    } else if (yesterdayHighStress) {
-      goals.push({
-        id: 'goal-mood',
-        category: 'mood',
-        icon: '🧘',
-        tag: 'Stay Calm',
-        title: 'Take a 5-min mindful pause',
-        reason: 'Stress was elevated yesterday — gentle deep breathing resets your nervous system',
-      });
-    } else {
-      goals.push({
-        id: 'goal-mood',
-        category: 'mood',
-        icon: '😌',
-        tag: 'Mindful Pace',
-        title: 'Protect your peace & calm',
-        reason: 'Maintains positive emotional clarity throughout your day',
-      });
-    }
-
-    // 3. BLOOD PRESSURE & GENTLE MOVEMENT (Studied from BP telemetry + symptoms)
+    // ─── 5. GENTLE PHYSICAL ACTIVITY & BP / CIRCULATION ───
     const todayDizzyOrLowBp =
       todayBp &&
       (todayBp.symptoms.includes('Dizzy / Lightheaded') ||
@@ -321,27 +420,25 @@ export class CycleEngine {
         b.feltFluctuations
     );
 
-    const todayExercised = todayLog && (todayLog.exerciseMinutes || 0) >= 20;
+    const todayExercised = (todayLog?.exerciseMinutes ?? 0) >= 15;
 
-    const hasTension =
-      todayLog?.symptoms.some((s) => s.symptomName.toLowerCase().includes('headache')) ||
-      pastThreeDays.some((l) =>
-        l.symptoms.some(
-          (s) =>
-            s.symptomName.toLowerCase().includes('headache') ||
-            s.symptomName.toLowerCase().includes('cramp') ||
-            s.symptomName.toLowerCase().includes('back')
-        )
-      );
-
-    if (todayDizzyOrLowBp) {
+    if (todayLog?.energyLevel === 'LOW' || todayLog?.energyLevel === 'VERY_LOW') {
+      goals.push({
+        id: 'goal-bp-movement',
+        category: 'movement',
+        icon: '🪷',
+        tag: 'Gentle Pacing',
+        title: 'Take a lighter approach to activities',
+        reason: 'You have logged low energy today. Consider taking a lighter approach to your activities and allowing gentle recovery.',
+      });
+    } else if (todayDizzyOrLowBp) {
       goals.push({
         id: 'goal-bp-movement',
         category: 'movement',
         icon: '🪑',
         tag: 'Movement & BP',
         title: 'Rise slowly & do light calf pumps',
-        reason: `Logged ${todayBp.systolic}/${todayBp.diastolic} mmHg with dizziness today — gentle calf flexing pumps blood back up`,
+        reason: `Logged ${todayBp.systolic}/${todayBp.diastolic} mmHg with dizziness — gentle leg flexing pumps blood back up safely.`,
       });
     } else if (todayExercised) {
       goals.push({
@@ -349,8 +446,8 @@ export class CycleEngine {
         category: 'movement',
         icon: '🚶‍♀️',
         tag: 'Movement Done',
-        title: `${todayLog.exerciseMinutes} min movement completed`,
-        reason: 'Activity logged today! Healthy circulation & endorphin boost achieved',
+        title: `${todayLog!.exerciseMinutes} min movement completed`,
+        reason: 'Movement logged today! Healthy circulation and endorphin boost achieved.',
         completed: true,
       });
     } else if (recentDizzyOrLowBp) {
@@ -358,115 +455,79 @@ export class CycleEngine {
         id: 'goal-bp-movement',
         category: 'movement',
         icon: '🚶‍♀️',
-        tag: 'Movement & BP',
-        title: '15-min gentle walk or stretch',
-        reason: 'Recent low pressure dips noted — light movement improves venous return & balances BP',
-      });
-    } else if (hasTension) {
-      goals.push({
-        id: 'goal-bp-movement',
-        category: 'movement',
-        icon: '🚶‍♀️',
-        tag: 'Movement & BP',
-        title: '15-min gentle walk or stretch',
-        reason: 'Improves blood flow, balances blood pressure, and relieves physical tension',
+        tag: 'Gentle Walk',
+        title: '10–15 min gentle walk or stretch',
+        reason: 'Recent low pressure dips noted — light, unhurried movement improves venous return and balances BP.',
       });
     } else {
+      const movementTitle =
+        activityStyle === 'restorative'
+          ? 'Gentle stretching or restorative yoga'
+          : activityStyle === 'moderate'
+          ? '20–30 min moderate walk or movement'
+          : 'Light movement to boost stamina';
+
       goals.push({
         id: 'goal-bp-movement',
         category: 'movement',
         icon: '✨',
-        tag: 'Movement',
-        title: 'Light movement to boost stamina',
-        reason: 'Encourages healthy circulation and steady hormone rhythm',
+        tag: activityStyle === 'restorative' ? 'Mindful Flow' : 'Movement',
+        title: movementTitle,
+        reason: 'Encourages healthy circulation, eases muscle stiffness, and lifts mood naturally.',
       });
     }
 
-    // 4. HYDRATION GOAL (Adapts to today's logged water intake)
-    const todayWater = todayLog?.waterIntakeMl ?? 0;
-    const yesterdayWater = yesterday?.waterIntakeMl ?? 2000;
+    // ─── 6. STRESS MANAGEMENT & MOOD ("STAY CALM") ───
+    const highStressCount = [todayLog, ...pastThreeDays].filter(
+      (l) => l && ((l.stressLevel || 0) >= 4 || ['Stressed', 'Anxious', 'Irritated'].includes(l.moodPrimary || ''))
+    ).length;
 
-    if (todayWater >= 2000) {
+    const todayHighStress =
+      todayLog &&
+      ((todayLog.stressLevel || 0) >= 3 ||
+        ['Stressed', 'Anxious', 'Irritated', 'Low'].includes(todayLog.moodPrimary || ''));
+
+    const todayCalm =
+      todayLog &&
+      (todayLog.moodPrimary === 'Calm' || todayLog.moodPrimary === 'Happy') &&
+      (todayLog.stressLevel || 0) <= 2;
+
+    if (highStressCount >= 2) {
       goals.push({
-        id: 'goal-hydration',
-        category: 'hydration',
-        icon: '💧',
-        tag: 'Hydration Goal',
-        title: 'Drink at least 2000 ml water',
-        reason: `Hydration goal reached (${todayWater} ml)! Great job keeping your body refreshed`,
+        id: 'goal-mood',
+        category: 'mood',
+        icon: '🧘',
+        tag: 'Stress Reset',
+        title: 'Take a 5-min quiet breathing pause',
+        reason: 'Stress has been elevated recently. A short walk or breathing exercise may help reset your pace.',
+      });
+    } else if (todayHighStress) {
+      goals.push({
+        id: 'goal-mood',
+        category: 'mood',
+        icon: '🧘',
+        tag: 'Mindful Pause',
+        title: 'Pause for 5 slow, deep breaths',
+        reason: 'Stress was logged as elevated today — gentle deep breathing resets your nervous system.',
+      });
+    } else if (todayCalm) {
+      goals.push({
+        id: 'goal-mood',
+        category: 'mood',
+        icon: '😌',
+        tag: 'Calm & Grounded',
+        title: 'Protect your peace & calm',
+        reason: 'Calm and grounded state logged today! Enjoy this steady, peaceful flow.',
         completed: true,
-      });
-    } else if (todayWater > 0) {
-      const remaining = Math.max(250, 2000 - todayWater);
-      goals.push({
-        id: 'goal-hydration',
-        category: 'hydration',
-        icon: '💧',
-        tag: 'Hydration Goal',
-        title: `Drink ${remaining} ml more water today`,
-        reason: `${todayWater} ml logged so far today — reach 2000 ml to prevent headaches & energy dips`,
-      });
-    } else if (yesterdayWater < 1800) {
-      goals.push({
-        id: 'goal-hydration',
-        category: 'hydration',
-        icon: '💧',
-        tag: 'Hydration Goal',
-        title: 'Drink at least 2000 ml water',
-        reason: 'Hydration fell below goal yesterday — extra water eases bloating & tension',
       });
     } else {
       goals.push({
-        id: 'goal-hydration',
-        category: 'hydration',
-        icon: '💧',
-        tag: 'Hydration Goal',
-        title: 'Keep water intake steady',
-        reason: 'Refreshes cellular energy and supports body temperature balance',
-      });
-    }
-
-    // 5. SLEEP & RECOVERY GOAL (Adapts to last night's logged rest)
-    const todaySleep = todayLog?.sleepHours;
-    const shortSleepRecent =
-      pastThreeDays.filter((l) => (l.sleepHours || 0) > 0 && (l.sleepHours || 0) < 6.8).length >= 1;
-
-    if (todaySleep !== undefined && todaySleep !== null && todaySleep >= 7.5) {
-      goals.push({
-        id: 'goal-sleep',
-        category: 'sleep',
-        icon: '🌙',
-        tag: 'Rest & Sleep',
-        title: 'Maintain 7.5+ hrs quality rest',
-        reason: `Great rest logged (${todaySleep} hrs)! Maintain a calming screen-free bedtime tonight`,
-        completed: true,
-      });
-    } else if (todaySleep !== undefined && todaySleep !== null && todaySleep < 6.8) {
-      goals.push({
-        id: 'goal-sleep',
-        category: 'sleep',
-        icon: '🌙',
-        tag: 'Rest & Sleep',
-        title: 'Early screen-free wind-down (10 PM)',
-        reason: `Last night's sleep was short (${todaySleep} hrs) — prioritize restorative rest tonight`,
-      });
-    } else if (shortSleepRecent) {
-      goals.push({
-        id: 'goal-sleep',
-        category: 'sleep',
-        icon: '🌙',
-        tag: 'Rest & Sleep',
-        title: 'Early screen-free wind-down (10 PM)',
-        reason: 'Recent rest was below your 7.5 hr baseline — prioritize restorative sleep tonight',
-      });
-    } else {
-      goals.push({
-        id: 'goal-sleep',
-        category: 'sleep',
-        icon: '🌙',
-        tag: 'Rest & Sleep',
-        title: 'Maintain 7.5+ hrs quality rest',
-        reason: 'Replenishes energy for tomorrow',
+        id: 'goal-mood',
+        category: 'mood',
+        icon: '😌',
+        tag: 'Mindful Pace',
+        title: 'Protect your peace & calm',
+        reason: 'Taking short pauses throughout the day maintains emotional clarity and calm.',
       });
     }
 

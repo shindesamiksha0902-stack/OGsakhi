@@ -14,6 +14,12 @@ import {
   Heart,
   Droplet,
   Volume2,
+  Target,
+  Moon,
+  Activity,
+  ChevronRight,
+  Smartphone,
+  Radio,
 } from 'lucide-react';
 import { ReminderSettings } from '@/types';
 import { useAuth } from '@/context/AuthContext';
@@ -38,6 +44,9 @@ export default function SettingsPage() {
     enableDailyCheckin: true,
     dailyCheckinTime: '20:00',
     enableAi: true,
+    targetSleepHours: 7.5,
+    targetWaterMl: 2000,
+    activityStyle: 'gentle',
   });
   const [remindersSaved, setRemindersSaved] = useState(false);
   const [baselineSaved, setBaselineSaved] = useState(false);
@@ -395,6 +404,114 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Wellness Goals & Custom Daily Targets */}
+      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-card space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-sakhi-600" />
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Custom Wellness Goals & Targets</h2>
+              <p className="text-[11px] text-slate-400">
+                Personalize your daily sleep, water, and movement pacing
+              </p>
+            </div>
+          </div>
+          {remindersSaved && (
+            <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+              <Check className="w-3 h-3" /> Saved
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-4 pt-1">
+          {/* Target Sleep */}
+          <div>
+            <div className="flex justify-between text-xs text-slate-700 mb-1.5 font-medium">
+              <span className="flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Target Nightly Rest</span>
+              </span>
+              <span className="font-bold text-sakhi-600">
+                {reminders.targetSleepHours ?? 7.5} hours
+              </span>
+            </div>
+            <input
+              type="range"
+              min="6"
+              max="10"
+              step="0.5"
+              value={reminders.targetSleepHours ?? 7.5}
+              onChange={(e) =>
+                handleUpdateReminder({ targetSleepHours: Number(e.target.value) })
+              }
+              className="w-full accent-sakhi-500"
+            />
+            <span className="text-[11px] text-slate-400">
+              Daily recommendations adapt to guide you towards this restful baseline.
+            </span>
+          </div>
+
+          {/* Target Water */}
+          <div>
+            <div className="flex justify-between text-xs text-slate-700 mb-1.5 font-medium">
+              <span className="flex items-center gap-1.5">
+                <Droplet className="w-3.5 h-3.5 text-sky-500" />
+                <span>Target Daily Hydration</span>
+              </span>
+              <span className="font-bold text-sakhi-600">
+                {reminders.targetWaterMl ?? 2000} ml
+              </span>
+            </div>
+            <input
+              type="range"
+              min="1000"
+              max="3500"
+              step="250"
+              value={reminders.targetWaterMl ?? 2000}
+              onChange={(e) =>
+                handleUpdateReminder({ targetWaterMl: Number(e.target.value) })
+              }
+              className="w-full accent-sakhi-500"
+            />
+            <span className="text-[11px] text-slate-400">
+              Helps prevent fatigue dips and headache tension throughout your day.
+            </span>
+          </div>
+
+          {/* Activity / Movement Style */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-xs font-medium text-slate-700 block">
+              Movement & Activity Style
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'restorative', label: 'Restorative', desc: 'Stretching & calm yoga' },
+                { id: 'gentle', label: 'Gentle', desc: 'Light walks & easy pacing' },
+                { id: 'moderate', label: 'Moderate', desc: 'Active walks & stamina' },
+              ].map((style) => (
+                <button
+                  key={style.id}
+                  type="button"
+                  onClick={() =>
+                    handleUpdateReminder({ activityStyle: style.id as any })
+                  }
+                  className={`p-2.5 rounded-2xl border text-left transition-all ${
+                    (reminders.activityStyle || 'gentle') === style.id
+                      ? 'bg-rose-50/80 border-rose-300 text-sakhi-700 shadow-2xs'
+                      : 'bg-slate-50/60 hover:bg-slate-100 border-slate-200/80 text-slate-600'
+                  }`}
+                >
+                  <span className="text-xs font-bold block">{style.label}</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5 leading-snug">
+                    {style.desc}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Cycle Baselines */}
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-card space-y-4">
         <div className="flex items-center gap-2">
@@ -480,6 +597,38 @@ export default function SettingsPage() {
         </div>
 
       </div>
+
+      {/* Health Integrations & Privacy Navigation Card */}
+      <Link
+        href="/settings/integrations"
+        className="block group bg-gradient-to-r from-sky-50/80 via-indigo-50/40 to-white p-5 rounded-3xl border border-sky-100 shadow-2xs hover:shadow-card hover:border-sky-200 transition-all"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+              <Radio className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-800">
+                  Health Integrations & Privacy Center
+                </span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800">
+                  New
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Bluetooth BP monitors, Google Health Connect & Apple HealthKit support, full CSV/JSON export
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs font-semibold text-indigo-600 group-hover:translate-x-0.5 transition-transform shrink-0">
+            <span className="hidden sm:inline">Explore</span>
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </div>
+      </Link>
 
       {/* Privacy & Health Data Ownership */}
       <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-card space-y-4">

@@ -49,6 +49,9 @@ const DEFAULT_STORE: MemoryStore = {
     enableDailyCheckin: true,
     dailyCheckinTime: '20:00',
     enableAi: true,
+    targetSleepHours: 7.5,
+    targetWaterMl: 2000,
+    activityStyle: 'gentle',
   },
   activeUserEmail: null,
 };

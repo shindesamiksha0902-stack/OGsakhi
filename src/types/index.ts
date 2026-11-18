@@ -47,7 +47,7 @@ export interface DailyLogData {
 
 export interface DailyRhythmGoal {
   id: string;
-  category: 'meals' | 'mood' | 'hydration' | 'sleep' | 'movement';
+  category: 'meals' | 'mood' | 'hydration' | 'sleep' | 'movement' | 'rest';
   icon: string;
   tag: string;
   title: string;
@@ -118,6 +118,9 @@ export interface ReminderSettings {
   enableDailyCheckin: boolean;
   dailyCheckinTime: string; // "20:00"
   enableAi?: boolean; // AI contextual insights toggle
+  targetSleepHours?: number; // e.g. 7.5 or 8
+  targetWaterMl?: number; // e.g. 2000
+  activityStyle?: 'gentle' | 'moderate' | 'restorative';
 }
 
 

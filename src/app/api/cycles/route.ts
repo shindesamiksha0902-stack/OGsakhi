@@ -15,7 +15,8 @@ export async function GET(req: Request) {
     const stats      = DataRepository.getCycleStats();
     const logs       = DataRepository.getLogs();
     const bpLogs     = DataRepository.getBpLogs();
-    const dailyGoals = CycleEngine.generateDailyRhythmGoals(logs, stats.currentPhase, bpLogs);
+    const settings   = DataRepository.getReminderSettings();
+    const dailyGoals = CycleEngine.generateDailyRhythmGoals(logs, stats.currentPhase, bpLogs, settings);
 
     return NextResponse.json({ success: true, data: { cycles, stats, dailyGoals } });
   } catch (error: any) {
